@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package cultivation;
+
+option go_package = "github.com/cultivation-world/shared/proto;cultivation";
+
+import "entity.proto";
+import "world.proto";
+
+service GameService {
+    rpc ExecuteOperation(OperationRequest) returns (OperationResponse);
+    rpc GetEntity(EntityRequest) returns (EntityResponse);
+    rpc SyncState(SyncRequest) returns (SyncResponse);
+    rpc StreamEntityUpdates(EntityStreamRequest) returns (stream EntityUpdate);
+}
+
+message OperationRequest {
+    string operation_id = 1;
+    string actor_id = 2;
+    string action_type = 3;
+    map<string, string> params = 4;
+    int64 timestamp = 5;
+}
+
+message OperationResponse {
+    bool success = 1;
+    string message = 2;
+    map<string, string> effects = 3;
+    int64 timestamp = 4;
+}
+
+message EntityRequest {
+    string entity_id = 1;
+}
+
+message EntityResponse {
+    Entity entity = 1;
+    bool found = 2;
+}
+
+message SyncRequest {
+    string entity_id = 1;
+    string region_id = 2;
+}
+
+message SyncResponse {
+    Entity entity = 1;
+    Region region = 2;
+    repeated string nearby_entity_ids = 3;
+    int64 world_time = 4;
+}
+
+message EntityStreamRequest {
+    string entity_id = 1;
+}
+
+message EntityUpdate {
+    string entity_id = 1;
+    string update_type = 2;
+    map<string, string> changes = 3;
+    int64 timestamp = 4;
+}

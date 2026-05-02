@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package cultivation;
+
+option go_package = "github.com/cultivation-world/shared/proto;cultivation";
+
+message Region {
+    string id = 1;
+    string name = 2;
+    string parent_region_id = 3;
+    double spiritual_density = 4;
+    int32 spiritual_tier = 5;
+    int32 danger_level = 6;
+    repeated Resource resources = 7;
+    RegionRules rules = 8;
+    string description = 9;
+    string lore = 10;
+}
+
+message Resource {
+    string id = 1;
+    string name = 2;
+    string type = 3;
+    int32 rarity = 4;
+    int32 quantity = 5;
+    double respawn_rate = 6;
+    int64 last_harvested = 7;
+}
+
+message RegionRules {
+    bool is_restricted = 1;
+    string restricted_by = 2;
+    double tax_rate = 3;
+    repeated string forbidden_actions = 4;
+}
+
+message WorldEvent {
+    string id = 1;
+    string name = 2;
+    string type = 3;
+    string description = 4;
+    string region_id = 5;
+    int64 start_time = 6;
+    int64 end_time = 7;
+    repeated string participant_ids = 8;
+    string status = 9;
+}
+
+message WorldState {
+    int64 epoch = 1;
+    map<string, Region> regions = 2;
+    repeated WorldEvent active_events = 3;
+    BalanceMetrics balance_metrics = 4;
+    int64 last_updated = 5;
+}
+
+message BalanceMetrics {
+    double power_distribution = 1;
+    double resource_circulation = 2;
+    double sect_diversity = 3;
+    double karma_distribution = 4;
+}
+
+service WorldService {
+    rpc GetRegion(RegionRequest) returns (RegionResponse);
+    rpc SpawnResources(SpawnRequest) returns (SpawnResponse);
+    rpc TriggerEvent(EventRequest) returns (EventResponse);
+    rpc GetWorldState(WorldStateRequest) returns (WorldStateResponse);
+}
+
+message RegionRequest {
+    string region_id = 1;
+}
+
+message RegionResponse {
+    Region region = 1;
+    bool found = 2;
+}
+
+message SpawnRequest {
+    string region_id = 1;
+    string resource_type = 2;
+    int32 quantity = 3;
+}
+
+message SpawnResponse {
+    bool success = 1;
+    repeated Resource spawned = 2;
+}
+
+message EventRequest {
+    string event_type = 1;
+    string region_id = 2;
+    map<string, string> params = 3;
+}
+
+message EventResponse {
+    bool success = 1;
+    WorldEvent event = 2;
+}
+
+message WorldStateRequest {}
+
+message WorldStateResponse {
+    WorldState state = 1;
+}

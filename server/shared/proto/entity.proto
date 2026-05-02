@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package cultivation;
+
+option go_package = "github.com/cultivation-world/shared/proto;cultivation";
+
+message Entity {
+    string id = 1;
+    string entity_type = 2;
+    string name = 3;
+    string realm = 4;
+    WorldPosition position = 5;
+    Attributes attributes = 6;
+    Karma karma = 7;
+    string status = 8;
+    int64 created_at = 9;
+    int64 updated_at = 10;
+}
+
+message WorldPosition {
+    string region_id = 1;
+    double x = 2;
+    double y = 3;
+}
+
+message Attributes {
+    double qi = 1;
+    double max_qi = 2;
+    double spiritual_power = 3;
+    double max_spiritual_power = 4;
+    double divine_sense = 5;
+    int32 comprehension = 6;
+    int32 constitution = 7;
+    int32 luck = 8;
+    double cultivation_progress = 9;
+    double attack_power = 10;
+    double defense = 11;
+    double speed = 12;
+    int32 mental_stability = 13;
+    int32 remaining_lifespan = 14;
+    int32 max_lifespan = 15;
+}
+
+message Karma {
+    int32 karma_value = 1;
+    int32 merit = 2;
+    string heavenly_mark = 3;
+}
+
+message SpiritStones {
+    int64 low_grade = 1;
+    int64 medium_grade = 2;
+    int64 high_grade = 3;
+    int64 premium_grade = 4;
+}
