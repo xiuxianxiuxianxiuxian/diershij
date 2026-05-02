@@ -500,6 +500,7 @@ EconomyEngine {
 - 天道不是模糊规则，而是严格的数学算法
 - 所有世界平衡、因果、天劫、资源刷新均由算法决定
 - 算法参数公开透明，可通过游戏内观测推导
+- 无任何人为干预，一切由算法自动执行
 
 #### 8.1 因果业力算法
 
@@ -573,6 +574,727 @@ HeavenlyTribulationAlgorithm {
         strength *= (1.0 + recent_breakthroughs * 0.1)
         
         return strength
+}
+```
+
+#### 8.3 寿命与衰老算法
+
+```
+LifespanAlgorithm {
+    // 境界寿命上限表
+    REALM_LIFESPAN = {
+        "mortal": 80,          // 凡人80年
+        "qi_condensation": 120, // 炼气120年
+        "foundation": 200,      // 筑基200年
+        "golden_core": 500,     // 金丹500年
+        "nascent_soul": 1000,   // 元婴1000年
+        "soul_transformation": 3000, // 化神3000年
+        "void_refinement": 5000,     // 炼虚5000年
+        "integration": 8000,         // 合体8000年
+        "mahayana": 10000,           // 大乘10000年
+        "tribulation": 15000         // 渡劫15000年
+    }
+    
+    // 当前剩余寿命计算
+    calculate_remaining_lifespan(entity) -> Years:
+        max_lifespan = REALM_LIFESPAN[entity.realm]
+        current_age = get_current_age(entity)
+        return max_lifespan - current_age
+    
+    // 衰老影响
+    calculate_aging_penalty(entity) -> Penalty:
+        remaining_pct = entity.remaining_lifespan / entity.max_lifespan
+        
+        if remaining_pct > 0.5:
+            return 0  // 50%寿命以上无影响
+        if remaining_pct > 0.2:
+            return (0.5 - remaining_pct) * 0.3  // 修炼效率-3%~-9%
+        if remaining_pct > 0.1:
+            return (0.2 - remaining_pct) * 0.5 + 0.09  // 修炼效率-9%~-14%
+        return 0.2  // 最后10%寿命，修炼效率-20%
+    
+    // 寿元耗尽处理
+    handle_lifespan_depletion(entity) -> Result:
+        if entity.remaining_lifespan <= 0:
+            if entity.can_breakthrough():
+                return TRIGGER_BREAKTHROUGH  // 触发突破尝试
+            else:
+                return ENTITY_DECEASE  // 身死道消
+}
+```
+
+#### 8.4 修炼效率算法
+
+```
+CultivationEfficiencyAlgorithm {
+    // 修炼效率基础公式
+    calculate_cultivation_rate(entity) -> Rate:
+        base_rate = entity.comprehension * 0.1
+        
+        // 灵气浓度修正
+        spiritual_factor = entity.location.spiritual_density / 100.0
+        
+        // 功法匹配度修正（灵根与功法属性匹配）
+        method_match = calculate_method_compatibility(entity, entity.active_method)
+        
+        // 境界修正（境界越高，修炼越慢）
+        realm_penalty = 1.0 / (1.0 + entity.realm_level * 0.2)
+        
+        // 心境状态修正
+        state_factor = get_mental_state_factor(entity)
+        
+        // 衰老修正
+        aging_penalty = calculate_aging_penalty(entity)
+        
+        return base_rate * spiritual_factor * method_match * realm_penalty * state_factor * (1.0 - aging_penalty)
+    
+    // 灵根与功法匹配度
+    calculate_method_compatibility(entity, method) -> Score:
+        match_count = 0
+        for root in entity.spiritual_roots:
+            if root in method.required_roots:
+                match_count += 1
+        return match_count / max(len(method.required_roots), 1)
+}
+```
+
+#### 8.5 突破成功率算法
+
+```
+BreakthroughAlgorithm {
+    // 突破成功率计算
+    calculate_breakthrough_success(entity) -> Probability:
+        base_prob = BASE_BREAKTHROUGH_PROB[entity.target_realm]
+        
+        // 修为积累修正（修炼时间越长，成功率越高）
+        accumulation_factor = min(1.5, 1.0 + entity.cultivation_time / required_time)
+        
+        // 功法品质修正
+        method_quality = entity.active_method.quality / 100.0
+        
+        // 资源辅助修正（丹药、法宝等）
+        resource_bonus = sum(item.breakthrough_bonus for item in entity.consumed_resources)
+        
+        // 心境修正
+        mental_factor = entity.mental_stability / 100.0
+        
+        // 气运修正
+        luck_factor = 1.0 + (entity.luck - 50) / 200.0
+        
+        prob = base_prob * accumulation_factor * method_quality * (1.0 + resource_bonus) * mental_factor * luck_factor
+        return clamp(prob, 0.05, 0.8)  // 限制在5%-80%
+    
+    // 突破失败惩罚
+    calculate_breakthrough_failure_penalty(entity) -> Penalty:
+        realm_loss = entity.realm_level * 0.1  // 损失10%当前境界修为
+        cooldown_time = 24 * entity.realm_level  // 冷却时间（小时）
+        mental_damage = 20  // 心境损伤
+        
+        return {
+            "cultivation_loss": realm_loss,
+            "cooldown_hours": cooldown_time,
+            "mental_damage": mental_damage,
+            "injury_chance": 0.3  // 30%概率受伤
+        }
+}
+```
+
+#### 8.6 战斗伤害算法
+
+```
+CombatDamageAlgorithm {
+    // 基础伤害计算
+    calculate_damage(attacker, defender, skill) -> Damage:
+        base_damage = attacker.attack_power * skill.multiplier
+        
+        // 境界压制
+        realm_diff = attacker.realm_level - defender.realm_level
+        realm_suppression = 1.0 + realm_diff * 0.15  // 每高1境界+15%伤害
+        
+        // 属性克制
+        element_factor = calculate_element_interaction(attacker.element, defender.element)
+        
+        // 防御减免
+        defense_reduction = defender.defense / (defender.defense + 100)
+        
+        // 功法加成
+        method_bonus = 1.0 + attacker.active_method.damage_bonus
+        
+        raw_damage = base_damage * realm_suppression * element_factor * (1.0 - defense_reduction) * method_bonus
+        
+        // 暴击判定
+        if random() < attacker.crit_rate:
+            raw_damage *= attacker.crit_damage
+        
+        return raw_damage
+    
+    // 属性克制关系
+    calculate_element_interaction(atk_element, def_element) -> Factor:
+        INTERACTIONS = {
+            ("fire", "metal"): 1.5,
+            ("fire", "wood"): 1.3,
+            ("water", "fire"): 1.5,
+            ("wood", "earth"): 1.5,
+            ("metal", "wood"): 1.5,
+            ("earth", "water"): 1.5,
+        }
+        return INTERACTIONS.get((atk_element, def_element), 1.0)
+    
+    // 战斗结果判定
+    resolve_combat(attacker, defender) -> Result:
+        attacker_hp = attacker.max_hp
+        defender_hp = defender.max_hp
+        
+        while attacker_hp > 0 and defender_hp > 0:
+            damage = calculate_damage(attacker, defender, attacker.selected_skill)
+            defender_hp -= damage
+            if defender_hp <= 0:
+                break
+            
+            damage = calculate_damage(defender, attacker, defender.selected_skill)
+            attacker_hp -= damage
+        
+        return {
+            "winner": attacker if defender_hp <= 0 else defender,
+            "loser": defender if defender_hp <= 0 else attacker,
+            "damage_dealt": {
+                attacker.id: attacker.max_hp - attacker_hp,
+                defender.id: defender.max_hp - defender_hp
+            }
+        }
+}
+```
+
+#### 8.7 功法冲突与兼容算法
+
+```
+MethodCompatibilityAlgorithm {
+    // 多功法同时修炼的兼容性
+    calculate_method_conflict(entity, methods) -> ConflictScore:
+        if len(methods) == 1:
+            return 0  // 单功法无冲突
+        
+        conflict = 0
+        for i, m1 in enumerate(methods):
+            for m2 in methods[i+1:]:
+                // 属性冲突检测
+                if m1.element == opposite(m2.element):
+                    conflict += 0.5
+                // 功法理念冲突
+                if m1.alignment != m2.alignment:
+                    conflict += 0.3
+                // 境界要求差异
+                if abs(m1.realm_requirement - m2.realm_requirement) > 2:
+                    conflict += 0.2
+        
+        return conflict / (len(methods) * (len(methods) - 1) / 2)
+    
+    // 功法反噬计算
+    calculate_method_backlash(entity) -> Risk:
+        conflict = calculate_method_conflict(entity, entity.active_methods)
+        
+        if conflict < 0.2:
+            return 0  // 无风险
+        if conflict < 0.5:
+            return 0.1  // 10%反噬概率
+        if conflict < 0.8:
+            return 0.3  // 30%反噬概率
+        return 0.6  // 60%反噬概率
+}
+```
+
+#### 8.8 丹药炼制算法
+
+```
+AlchemyAlgorithm {
+    // 炼丹成功率
+    calculate_pill_success_rate(alchemist, recipe) -> Probability:
+        base_prob = recipe.base_success_rate
+        
+        // 炼丹师等级修正
+        skill_factor = alchemist.alchemy_level / recipe.required_level
+        
+        // 火候控制（炼丹技巧）
+        control_factor = 0.5 + alchemist.fire_control * 0.5
+        
+        // 材料品质
+        material_quality = average(recipe.materials.quality) / 100.0
+        
+        // 丹炉品质
+        furnace_bonus = recipe.furnace.quality_bonus
+        
+        // 环境灵气
+        spiritual_factor = alchemist.location.spiritual_density / 100.0
+        
+        prob = base_prob * skill_factor * control_factor * material_quality * (1.0 + furnace_bonus) * spiritual_factor
+        return clamp(prob, 0.05, 0.95)
+    
+    // 丹药品阶生成
+    generate_pill_quality(success_rate, base_quality) -> Quality:
+        roll = random()
+        if roll < success_rate * 0.1:
+            return base_quality + 2  // 极品（10%概率）
+        if roll < success_rate * 0.3:
+            return base_quality + 1  // 上品
+        if roll < success_rate:
+            return base_quality      // 中品
+        return base_quality - 1      // 下品（失败）
+    
+    // 炼丹失败后果
+    handle_alchemy_failure(recipe) -> Consequence:
+        if random() < 0.2:
+            return "explosion"  // 20%概率炸炉
+        if random() < 0.5:
+            return "wasted_materials"  // 50%概率材料损毁
+        return "failed_pill"  // 30%概率产出废丹
+}
+```
+
+#### 8.9 法宝炼制算法
+
+```
+ArtifactForgingAlgorithm {
+    // 炼器成功率
+    calculate_forging_success_rate(artificer, blueprint) -> Probability:
+        base_prob = blueprint.base_success_rate
+        
+        // 炼器师等级
+        skill_factor = artificer.artificing_level / blueprint.required_level
+        
+        // 材料匹配度
+        material_match = calculate_material_compatibility(blueprint)
+        
+        // 火焰品质
+        fire_quality = artificer.flame_tier / 10.0
+        
+        // 阵法辅助
+        formation_bonus = blueprint.supporting_formations * 0.05
+        
+        prob = base_prob * skill_factor * material_match * fire_quality * (1.0 + formation_bonus)
+        return clamp(prob, 0.05, 0.9)
+    
+    // 法宝品阶生成
+    generate_artifact_grade(success_rate, blueprint) -> Grade:
+        roll = random()
+        if roll < success_rate * 0.05:
+            return "ancient"  // 古宝（5%概率）
+        if roll < success_rate * 0.15:
+            return "heaven"   // 天器
+        if roll < success_rate * 0.4:
+            return "earth"    // 地器
+        if roll < success_rate:
+            return "mortal"   // 凡器
+        return "failed"       // 失败
+}
+```
+
+#### 8.10 阵法效果算法
+
+```
+FormationAlgorithm {
+    // 阵法威力计算
+    calculate_formation_power(formation, caster) -> Power:
+        base_power = formation.base_power
+        
+        // 阵法师等级
+        skill_factor = caster.formation_level / formation.required_level
+        
+        // 阵眼品质
+        eye_quality = formation.eye_item.quality / 100.0
+        
+        // 阵旗品质
+        flag_quality = average(formation.flags.quality) / 100.0
+        
+        // 地势加成
+        terrain_bonus = formation.terrain_bonus
+        
+        return base_power * skill_factor * eye_quality * flag_quality * (1.0 + terrain_bonus)
+    
+    // 破阵成功率
+    calculate_break_formation_rate(breaker, formation) -> Probability:
+        formation_power = calculate_formation_power(formation, formation.caster)
+        breaker_power = breaker.formation_level * 100
+        
+        // 境界压制
+        realm_diff = breaker.realm_level - formation.caster.realm_level
+        
+        prob = breaker_power / (formation_power + breaker_power) * (1.0 + realm_diff * 0.1)
+        return clamp(prob, 0.05, 0.8)
+}
+```
+
+#### 8.11 气运与机缘算法
+
+```
+FortuneAlgorithm {
+    // 气运值计算
+    calculate_fortune(entity) -> FortuneScore:
+        base = entity.luck
+        
+        // 功德加成
+        merit_bonus = entity.merit * 0.1
+        
+        // 业力减益
+        karma_penalty = entity.karma * 0.05
+        
+        // 近期行为影响（最近7天）
+        recent_actions = get_recent_actions(entity, days=7)
+        action_bonus = calculate_action_fortune_bonus(recent_actions)
+        
+        return base + merit_bonus - karma_penalty + action_bonus
+    
+    // 机缘触发概率
+    calculate_opportunity_rate(entity, location) -> Probability:
+        fortune = calculate_fortune(entity)
+        
+        // 基础概率
+        base_prob = 0.01  // 1%基础概率
+        
+        // 气运修正
+        fortune_factor = 1.0 + fortune / 100.0
+        
+        // 地点灵气
+        spiritual_factor = location.spiritual_density / 100.0
+        
+        // 探索活跃度
+        exploration_factor = location.exploration_activity
+        
+        // 天道平衡修正
+        balance_factor = get_world_balance_factor()
+        
+        return base_prob * fortune_factor * spiritual_factor * exploration_factor * balance_factor
+}
+```
+
+#### 8.12 灵根觉醒算法
+
+```
+SpiritualRootAlgorithm {
+    // 隐藏灵根觉醒概率
+    calculate_awakening_rate(entity) -> Probability:
+        base_prob = 0.001  // 0.1%基础概率
+        
+        // 修炼年限修正
+        cultivation_years = entity.cultivation_time / 365
+        year_factor = 1.0 + cultivation_years * 0.1
+        
+        // 突破经历修正
+        breakthrough_count = entity.breakthrough_count
+        breakthrough_factor = 1.0 + breakthrough_count * 0.2
+        
+        // 气运修正
+        fortune_factor = 1.0 + entity.luck / 50.0
+        
+        return base_prob * year_factor * breakthrough_factor * fortune_factor
+    
+    // 变异灵根生成
+    generate_mutated_root(original_roots) -> MutatedRoot:
+        MUTATION_TABLE = {
+            ("fire", "water"): "steam",
+            ("fire", "metal"): "lightning",
+            ("water", "earth"): "ice",
+            ("wood", "fire"): "wind",
+            ("metal", "earth"): "crystal",
+        }
+        return MUTATION_TABLE.get(tuple(sorted(original_roots)), None)
+}
+```
+
+#### 8.13 灵气潮汐算法
+
+```
+SpiritualTideAlgorithm {
+    // 灵气潮汐周期（天）
+    TIDE_CYCLE = 365  // 一年一周期
+    
+    // 当前灵气潮位计算
+    calculate_current_tide(day) -> TideLevel:
+        cycle_day = day % TIDE_CYCLE
+        
+        // 正弦曲线模拟潮汐
+        tide_value = sin(2 * PI * cycle_day / TIDE_CYCLE)
+        
+        // 潮汐阶段
+        if tide_value > 0.5:
+            return "rising"    // 涨潮
+        if tide_value < -0.5:
+            return "ebbing"    // 退潮
+        return "stable"        // 平稳
+    
+    // 灵气浓度动态调整
+    adjust_spiritual_density(region, tide_level) -> NewDensity:
+        base_density = region.base_spiritual_density
+        
+        if tide_level == "rising":
+            return base_density * 1.3  // 涨潮+30%
+        if tide_level == "ebbing":
+            return base_density * 0.7  // 退潮-30%
+        return base_density  // 平稳
+}
+```
+
+#### 8.14 妖兽生成算法
+
+```
+DemonBeastAlgorithm {
+    // 妖兽生成率
+    calculate_beast_spawn_rate(region) -> Rate:
+        base_rate = region.danger_level * 10
+        
+        // 灵气浓度修正
+        spiritual_factor = region.spiritual_density / 100.0
+        
+        // 人类活动压制
+        human_activity = count_entities_in_region(region) / region.capacity
+        human_suppression = 1.0 - human_activity * 0.5
+        
+        // 妖兽潮周期
+        tide_factor = calculate_demon_beast_tide_factor()
+        
+        return base_rate * spiritual_factor * human_suppression * tide_factor
+    
+    // 妖兽等级分布
+    generate_beast_level_distribution(region) -> Distribution:
+        base_level = region.danger_level
+        
+        // 指数衰减分布
+        distribution = {}
+        for level in range(1, base_level + 5):
+            prob = exp(-0.5 * (level - base_level))
+            distribution[level] = prob
+        
+        return normalize(distribution)
+}
+```
+
+#### 8.15 宗门气运算法
+
+```
+SectFortuneAlgorithm {
+    // 宗门气运计算
+    calculate_sect_fortune(sect) -> FortuneScore:
+        // 弟子平均实力
+        avg_power = average(member.combat_power for member in sect.members)
+        
+        // 传承历史
+        history_bonus = sect.age_years * 0.01
+        
+        // 底蕴（藏经阁、宝库等）
+        foundation_bonus = sect.facilities_score * 0.1
+        
+        // 声望
+        reputation_bonus = sect.reputation / 1000.0
+        
+        // 天道评价
+        heaven_evaluation = calculate_heavenly_evaluation(sect)
+        
+        return avg_power + history_bonus + foundation_bonus + reputation_bonus + heaven_evaluation
+    
+    // 宗门兴衰周期
+    predict_sect_trajectory(sect) -> Trajectory:
+        fortune = calculate_sect_fortune(sect)
+        
+        if fortune > 80:
+            return "prospering"  // 兴盛期
+        if fortune > 50:
+            return "stable"      // 稳定期
+        if fortune > 20:
+            return "declining"   // 衰退期
+        return "collapsing"      // 崩溃期
+}
+```
+
+#### 8.16 世界平衡算法
+
+```
+WorldBalanceAlgorithm {
+    // 世界生态健康度评估
+    evaluate_world_health() -> HealthMetrics:
+        metrics = {
+            "power_distribution": gini_coefficient(entity_powers),  // 实力基尼系数
+            "resource_circulation": tx_volume_24h / total_resources,  // 资源流通率
+            "sect_diversity": sect_count / entity_count,              // 宗门多样性
+            "karma_distribution": stddev(entity_karma)               // 业力分布标准差
+        }
+        return metrics
+    
+    // 平衡干预策略
+    apply_balance_adjustment(metrics) -> Adjustment:
+        // 实力差距过大时，增加弱者机缘
+        if metrics.power_distribution > 0.7:
+            spawn_opportunity_for_weak_entities()
+        
+        // 资源流通过低时，增加资源刷新
+        if metrics.resource_circulation < 0.01:
+            increase_resource_spawn_rate(1.5)
+        
+        // 宗门过于集中时，增加散修机缘
+        if metrics.sect_diversity < 0.05:
+            spawn_hermit_opportunities()
+        
+        // 业力分布极端时，触发天道清洗
+        if metrics.karma_distribution > 500:
+            trigger_heavenly_cleansing()
+}
+```
+
+#### 8.17 资源刷新算法
+
+```
+ResourceSpawnAlgorithm {
+    // 资源刷新率计算
+    calculate_spawn_rate(resource_type, region) -> SpawnRate:
+        base_rate = RESOURCE_BASE_RATES[resource_type]
+        
+        // 灵气浓度修正
+        spiritual_factor = region.spiritual_density / 100.0
+        
+        // 采集压力修正（最近采集量越多，刷新越慢）
+        recent_harvest = get_recent_harvest(resource_type, region, hours=24)
+        pressure_factor = max(0.1, 1.0 - recent_harvest / base_rate * 10)
+        
+        // 世界平衡修正
+        balance_factor = get_world_balance_factor()
+        
+        return base_rate * spiritual_factor * pressure_factor * balance_factor
+    
+    // 稀有资源出现概率
+    calculate_rare_spawn_chance(region) -> Chance:
+        base_chance = 0.001  // 0.1%基础概率
+        
+        // 灵气品阶修正
+        tier_factor = region.spiritual_tier / 9.0
+        
+        // 探索活跃度修正
+        exploration_factor = get_region_exploration_activity(region)
+        
+        return base_chance * tier_factor * exploration_factor
+}
+```
+
+#### 8.18 交易税收算法
+
+```
+TradeTaxAlgorithm {
+    // 天道税（每笔交易自动扣除）
+    calculate_heavenly_tax(amount) -> Tax:
+        base_rate = 0.01  // 1%基础税率
+        
+        // 金额越大，税率越高（累进税制）
+        if amount > 1000000:
+            rate = base_rate * 1.5
+        elif amount > 100000:
+            rate = base_rate * 1.2
+        else:
+            rate = base_rate
+        
+        return amount * rate
+    
+    // 宗门税（宗门成员在势力范围内交易）
+    calculate_sect_tax(amount, sect) -> Tax:
+        sect_rate = sect.tax_rate  // 宗门自定税率
+        return amount * sect_rate
+    
+    // 总税收
+    calculate_total_tax(amount, sect=None) -> Tax:
+        heavenly = calculate_heavenly_tax(amount)
+        sect_tax = calculate_sect_tax(amount, sect) if sect else 0
+        return heavenly + sect_tax
+}
+```
+
+#### 8.19 心魔入侵算法
+
+```
+InnerDemonAlgorithm {
+    // 心魔触发概率
+    calculate_inner_demon_rate(entity) -> Probability:
+        base_prob = 0.001  // 0.1%基础概率（每日）
+        
+        // 心境稳定性修正
+        mental_factor = (100 - entity.mental_stability) / 100.0
+        
+        // 业力修正
+        karma_factor = 1.0 + entity.karma / 1000.0
+        
+        // 修炼压力修正（突破前后）
+        breakthrough_stress = 1.0
+        if entity.recently_attempted_breakthrough(days=7):
+            breakthrough_stress = 2.0
+        
+        // 功法冲突修正
+        conflict_factor = 1.0 + calculate_method_conflict(entity) * 2.0
+        
+        return base_prob * mental_factor * karma_factor * breakthrough_stress * conflict_factor
+    
+    // 心魔强度
+    calculate_inner_demon_strength(entity) -> Strength:
+        base_strength = entity.realm_level * 100
+        
+        // 执念修正
+        obsession_bonus = entity.obsession_count * 50
+        
+        return base_strength + obsession_bonus
+    
+    // 心魔战胜效果
+    handle_inner_demon_victory(entity) -> Effect:
+        // 战胜心魔：心境提升，修为精进
+        entity.mental_stability += 20
+        entity.cultivation_progress += 0.1
+        return "enlightenment"
+    
+    // 心魔战败效果
+    handle_inner_demon_defeat(entity) -> Effect:
+        // 败于心魔：修为倒退，可能走火入魔
+        entity.cultivation_progress -= 0.2
+        entity.mental_stability -= 30
+        
+        if random() < 0.3:
+            return "qi_deviation"  // 30%走火入魔
+        return "cultivation_regression"
+}
+```
+
+#### 8.20 世界演化算法
+
+```
+WorldEvolutionAlgorithm {
+    // 世界纪元推进
+    advance_world_epoch() -> NewEpoch:
+        current_epoch = get_current_epoch()
+        
+        // 检查是否满足纪元更替条件
+        if meets_epoch_transition_criteria():
+            new_epoch = generate_new_epoch(current_epoch)
+            apply_epoch_changes(new_epoch)
+            return new_epoch
+        
+        return current_epoch
+    
+    // 纪元更替条件
+    meets_epoch_transition_criteria() -> Boolean:
+        criteria = [
+            count_entities_above_realm("nascent_soul") >= 10,  // 10个以上元婴
+            world_age_years >= 1000,                            // 世界运行1000年
+            major_conflict_count_100y >= 5                      // 百年内5次大战
+        ]
+        return all(criteria)
+    
+    // 新纪元生成
+    generate_new_epoch(current_epoch) -> Epoch:
+        // 灵气重置
+        reset_spiritual_density()
+        
+        // 资源重新分布
+        redistribute_resources()
+        
+        // 天道规则微调
+        adjust_heavenly_rules()
+        
+        // 新秘境生成
+        spawn_new_secret_realms()
+        
+        return new_epoch
 }
 ```
 
