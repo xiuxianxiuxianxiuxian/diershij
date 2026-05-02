@@ -186,6 +186,12 @@ WorldInitializer {
 - **成本控制**：NPC决策使用v3，关键剧情/复杂决策使用R1
 - **速率限制**：DeepSeek限制600 RPM，需实现令牌桶限流
 
+**模板匹配与LLM调用策略：**
+- **核心原则**：优先使用预生成模板，仅在模板不匹配时调用LLM
+- **模板库**：预生成常见行为模式、对话场景、决策树
+- **匹配逻辑**：基于情境相似度匹配模板，相似度≥50%直接使用模板
+- **LLM降级**：仅<50%相似度场景需要LLM实时生成
+
 ```
 LLMProvider {
     provider: DeepSeekAPI
@@ -195,26 +201,64 @@ LLMProvider {
     rate_limiter: TokenBucket(600/min)
     circuit_breaker: CircuitBreaker
     fallback: BehaviorTree
+    
+    // 模板匹配与LLM调用策略
+    decide(context) -> Decision:
+        // 1. 尝试模板匹配
+        template = template_library.match(context, threshold=0.5)
+        if template:
+            metrics.record_template_hit()
+            return template.instantiate(context)
+        
+        // 2. 相似度<50%，调用LLM
+        try:
+            response = provider.generate(
+                model=context.priority == HIGH ? reasoning : daily,
+                context=context,
+                timeout=10s,
+                max_tokens=500
+            )
+            // 3. 将LLM结果加入模板库（学习机制）
+            template_library.add(context, response)
+            return parse_decision(response)
+        catch TimeoutError:
+            metrics.record_fallback()
+            return behavior_tree.decide(context)
 }
-
-call_llm(context, priority) -> Decision:
-    model = priority == HIGH ? reasoning : daily
-    try:
-        response = provider.generate(
-            model=model,
-            context=context,
-            timeout=10s,
-            max_tokens=500
-        )
-        return parse_decision(response)
-    catch TimeoutError:
-        metrics.record_fallback()
-        return behavior_tree.decide(context)
-    catch RateLimitError:
-        metrics.record_throttle()
-        wait(backoff_time)
-        retry()
 ```
+
+**模板库结构：**
+```
+TemplateLibrary {
+    behavior_templates: map<Pattern, Template>    // 行为模板（修炼、采集、探索等）
+    dialogue_templates: map<Scenario, Template>   // 对话模板（交易、组队、冲突等）
+    decision_templates: map<Situation, Template>  // 决策模板（结盟、背叛、突破等）
+    
+    match(context, threshold) -> Template:
+        best_match = null
+        best_score = 0
+        
+        for template in all_templates:
+            score = calculate_similarity(context, template.pattern)
+            if score > best_score:
+                best_score = score
+                best_match = template
+        
+        if best_score >= threshold:
+            return best_match
+        return null
+}
+```
+
+**模板预生成内容：**
+- **行为模板**：500+常见行为模式（修炼路线、采集策略、探索路径）
+- **对话模板**：1000+对话场景（问候、交易、谈判、威胁、求助等）
+- **决策模板**：200+决策树（结盟条件、背叛时机、突破策略）
+
+**成本估算：**
+- 无模板：每次NPC决策调用LLM，1000NPC × 60次/小时 = 60,000次/小时
+- 有模板（≥50%命中率）：仅需30,000次LLM调用/小时，节省50%成本
+- 实际命中率随模板库增长而提升，预计运营1个月后可达70%+
 
 ## Components and Interfaces
 
@@ -262,7 +306,7 @@ Entity {
     entity_type: PLAYER | NPC
     name: string
     realm: CultivationRealm      // 境界
-    attributes: Attributes       // 属性
+    attributes: Attributes       // 详细属性（50+项）
     inventory: Inventory         // 背包
     methods: list[Method]        // 功法列表
     karma: Karma                 // 因果业力
@@ -274,6 +318,121 @@ Entity {
 **Player 和 NPC 继承同一基类，区别仅在于：**
 - Player: input_source = CLIENT
 - NPC: input_source = AI_AGENT
+
+### 2.1 详细属性系统（50+项）
+
+```
+Attributes {
+    // ===== 基础属性 =====
+    age: int                     // 年龄（岁）
+    gender: enum                 // 性别
+    appearance: int              // 容貌（1-100）
+    charisma: int                // 魅力（影响社交）
+    
+    // ===== 修炼属性 =====
+    qi: float                    // 气血值
+    spiritual_power: float       // 灵力值
+    divine_sense: float          // 神识强度
+    comprehension: int           // 悟性（1-100）
+    constitution: int            // 根骨（1-100）
+    luck: int                    // 气运（1-100）
+    cultivation_progress: float  // 修炼进度（0-100%）
+    cultivation_method: int      // 当前修炼功法熟练度
+    
+    // ===== 战斗属性 =====
+    attack_power: float          // 攻击力
+    defense: float               // 防御力
+    speed: float                 // 速度
+    crit_rate: float             // 暴击率（%）
+    crit_damage: float           // 暴击伤害（%）
+    dodge_rate: float            // 闪避率（%）
+    hit_rate: float              // 命中率（%）
+    penetration: float           // 破甲值
+    damage_reduction: float      // 伤害减免（%）
+    
+    // ===== 灵根系统 =====
+    spiritual_roots: list[Root]  // 灵根列表（金木水火风雷冰光暗等）
+    root_purity: int             // 灵根纯度（1-100）
+    root_awakened: bool          // 是否觉醒隐藏灵根
+    mutated_root: Root           // 变异灵根
+    
+    // ===== 心境属性 =====
+    mental_stability: int        // 心境稳定度（0-100）
+    obsession_count: int         // 执念数量
+    dao_heart: int               // 道心强度（1-100）
+    inner_demon_resistance: int  // 心魔抗性
+    enlightenment: int           // 顿悟值
+    
+    // ===== 生活技能 =====
+    alchemy_level: int           // 炼丹等级（1-10）
+    artificing_level: int        // 炼器等级（1-10）
+    formation_level: int         // 阵法等级（1-10）
+    fire_control: int            // 火候控制（1-100）
+    herb_knowledge: int          // 灵草辨识（1-100）
+    mining_skill: int            // 采矿技能（1-100）
+    talisman_skill: int          // 符箓技能（1-10）
+    beast_taming: int            // 御兽技能（1-10）
+    
+    // ===== 声望与社交 =====
+    reputation: int              // 声望值
+    sect_contribution: int       // 宗门贡献
+    faction_standings: map       // 各势力好感度
+    relationship_count: int      // 关系网络数量
+    mentor_id: EntityID          // 师父
+    disciple_ids: list[EntityID] // 徒弟列表
+    sworn_siblings: list[EntityID] // 结义兄弟
+    enemies: list[EntityID]      // 仇敌列表
+    lovers: list[EntityID]       // 道侣
+    
+    // ===== 因果业力 =====
+    karma: int                   // 业力值
+    merit: int                   // 功德值
+    karmic_debt: int             // 因果债
+    heavenly_mark: enum          // 天道标记（清白/微瑕/业重/恶贯/天怒）
+    
+    // ===== 寿命与状态 =====
+    remaining_lifespan: int      // 剩余寿命（年）
+    max_lifespan: int            // 寿命上限
+    aging_penalty: float         // 衰老惩罚
+    injuries: list[Injury]       // 伤势列表
+    buffs: list[Buff]            // 增益状态
+    debuffs: list[Debuff]        // 减益状态
+    poison_level: int            // 中毒程度
+    curse_level: int             // 诅咒程度
+    
+    // ===== 财富与资产 =====
+    spirit_stones: SpiritStones  // 灵石资产
+    property_value: int          // 总资产估值
+    real_estate: list[Property]  // 房产（洞府、店铺等）
+    business_income: int         // 商业收入
+    
+    // ===== 特殊属性 =====
+    bloodline: string            // 血脉（凡人/妖族/魔族/仙族等）
+    bloodline_purity: int        // 血脉纯度（1-100）
+    physique: string             // 体质（如混沌体、先天道体等）
+    physique_awakened: bool      // 体质是否觉醒
+    destiny: int                 // 命格（隐藏属性）
+    world_favor: int             // 世界眷顾度
+}
+```
+
+**属性分类说明：**
+
+| 类别 | 属性数量 | 主要影响 |
+|------|----------|----------|
+| 基础属性 | 4项 | 社交、外观 |
+| 修炼属性 | 8项 | 修炼效率、突破 |
+| 战斗属性 | 10项 | 战斗胜负 |
+| 灵根系统 | 4项 | 功法匹配、修炼速度 |
+| 心境属性 | 5项 | 心魔、突破稳定度 |
+| 生活技能 | 8项 | 炼丹、炼器、阵法等 |
+| 声望社交 | 9项 | 人际关系、势力互动 |
+| 因果业力 | 4项 | 天劫、机缘 |
+| 寿命状态 | 9项 | 生死、伤病、增益 |
+| 财富资产 | 4项 | 经济实力 |
+| 特殊属性 | 6项 | 血脉、体质、命格 |
+
+**总计：71项核心属性**
 
 ### 3. NPC AI 决策管道
 
@@ -1414,15 +1573,125 @@ CREATE TABLE entities (
     is_online BOOLEAN DEFAULT FALSE
 );
 
--- 属性表
-CREATE TABLE entity_attributes (
+-- 属性表（71项属性，分多表存储）
+CREATE TABLE entity_base_attributes (
     entity_id UUID PRIMARY KEY REFERENCES entities(id),
-    qi REAL DEFAULT 0,              -- 气血
-    spiritual_power REAL DEFAULT 0, -- 灵力
-    comprehension REAL DEFAULT 0,   -- 悟性
-    constitution REAL DEFAULT 0,    -- 根骨
-    luck REAL DEFAULT 0,            -- 气运
-    cultivation_progress REAL DEFAULT 0  -- 修炼进度
+    age INT DEFAULT 16,
+    gender VARCHAR(10),
+    appearance INT DEFAULT 50,
+    charisma INT DEFAULT 50,
+    qi REAL DEFAULT 100,
+    spiritual_power REAL DEFAULT 50,
+    divine_sense REAL DEFAULT 10,
+    comprehension INT DEFAULT 50,
+    constitution INT DEFAULT 50,
+    luck INT DEFAULT 50,
+    cultivation_progress REAL DEFAULT 0,
+    cultivation_method_proficiency REAL DEFAULT 0
+);
+
+-- 战斗属性表
+CREATE TABLE entity_combat_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    attack_power REAL DEFAULT 10,
+    defense REAL DEFAULT 5,
+    speed REAL DEFAULT 10,
+    crit_rate REAL DEFAULT 5,
+    crit_damage REAL DEFAULT 150,
+    dodge_rate REAL DEFAULT 5,
+    hit_rate REAL DEFAULT 95,
+    penetration REAL DEFAULT 0,
+    damage_reduction REAL DEFAULT 0
+);
+
+-- 灵根系统表
+CREATE TABLE entity_spiritual_roots (
+    entity_id UUID REFERENCES entities(id),
+    root_type VARCHAR(20),  -- 金木水火风雷冰光暗等
+    purity INT DEFAULT 50,
+    is_awakened BOOLEAN DEFAULT FALSE,
+    is_mutated BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY (entity_id, root_type)
+);
+
+-- 心境属性表
+CREATE TABLE entity_mental_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    mental_stability INT DEFAULT 80,
+    obsession_count INT DEFAULT 0,
+    dao_heart INT DEFAULT 50,
+    inner_demon_resistance INT DEFAULT 50,
+    enlightenment INT DEFAULT 0
+);
+
+-- 生活技能表
+CREATE TABLE entity_life_skills (
+    entity_id UUID REFERENCES entities(id),
+    alchemy_level INT DEFAULT 0,
+    artificing_level INT DEFAULT 0,
+    formation_level INT DEFAULT 0,
+    fire_control INT DEFAULT 0,
+    herb_knowledge INT DEFAULT 0,
+    mining_skill INT DEFAULT 0,
+    talisman_skill INT DEFAULT 0,
+    beast_taming INT DEFAULT 0,
+    PRIMARY KEY (entity_id)
+);
+
+-- 声望与社交表
+CREATE TABLE entity_social_attributes (
+    entity_id UUID REFERENCES entities(id),
+    reputation INT DEFAULT 0,
+    sect_contribution INT DEFAULT 0,
+    relationship_count INT DEFAULT 0,
+    mentor_id UUID REFERENCES entities(id),
+    disciple_ids UUID[],
+    sworn_siblings UUID[],
+    enemies UUID[],
+    lovers UUID[],
+    faction_standings JSONB DEFAULT '{}',
+    PRIMARY KEY (entity_id)
+);
+
+-- 因果业力表
+CREATE TABLE entity_karma_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    karma INT DEFAULT 0,
+    merit INT DEFAULT 0,
+    karmic_debt INT DEFAULT 0,
+    heavenly_mark VARCHAR(20) DEFAULT '清白'
+);
+
+-- 寿命与状态表
+CREATE TABLE entity_lifespan_status (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    remaining_lifespan INT DEFAULT 80,
+    max_lifespan INT DEFAULT 80,
+    aging_penalty REAL DEFAULT 0,
+    injuries JSONB DEFAULT '[]',
+    buffs JSONB DEFAULT '[]',
+    debuffs JSONB DEFAULT '[]',
+    poison_level INT DEFAULT 0,
+    curse_level INT DEFAULT 0
+);
+
+-- 财富与资产表
+CREATE TABLE entity_wealth_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    property_value BIGINT DEFAULT 0,
+    real_estate JSONB DEFAULT '[]',
+    business_income BIGINT DEFAULT 0
+);
+
+-- 特殊属性表
+CREATE TABLE entity_special_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    bloodline VARCHAR(30) DEFAULT '凡人',
+    bloodline_purity INT DEFAULT 0,
+    physique VARCHAR(50) DEFAULT '凡体',
+    physique_awakened BOOLEAN DEFAULT FALSE,
+    destiny INT DEFAULT 50,
+    world_favor INT DEFAULT 0
 );
 
 -- 灵石资产表（独立存储各级灵石）
