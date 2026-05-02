@@ -88,9 +88,57 @@ graph TB
 | 客户端 | Tauri + React | 桌面端界面，指令输入，世界信息渲染 |
 | 接入层 | WebSocket 网关 | 连接管理，消息路由，会话维持 |
 | 游戏服务器 | Go 微服务 | 核心游戏逻辑，操作验证，状态同步 |
-| 世界引擎 | Go 服务 | 世界状态管理，天道判定，危机事件生成 |
-| AI调度 | Go + Python | NPC决策调度，行为树执行，LLM调用 |
+| 世界引擎 | Go 服务 | 世界状态管理，天道判定，危机事件生成，**世界初始化** |
+| AI调度 | Go 服务 | NPC决策调度，行为树执行，**第三方LLM API调用** |
 | 数据层 | Redis + PostgreSQL + 向量库 | 热数据缓存，持久化存储，语义检索 |
+
+**动态实体规模设计：**
+- 服务器根据节点CPU/内存配置自动计算最大承载实体数
+- 公式：`max_entities = (available_memory_mb / memory_per_entity) * cpu_factor`
+- 当接近上限时，触发水平扩展或限制新NPC生成
+- LLM API调用采用并发控制池，避免超过API速率限制
+
+### 世界初始化引擎
+
+```
+WorldInitializer {
+    load_template(template_name) -> WorldSeed
+    generate_regions(seed) -> RegionGraph
+    spawn_initial_npcs(count, distribution) -> list[Entity]
+    place_resources(density, rarity_curve) -> ResourceMap
+    establish_initial_factions() -> FactionGraph
+}
+```
+
+**预置内容范围：**
+1. **基础地图结构**：3-5个主区域（凡人城镇、灵气山林、险地秘境等），区域间有连接路径
+2. **灵气节点分布**：不同浓度的灵气点，影响修炼效率
+3. **初始NPC**：20-50个引导NPC，具有不同性格、背景和初始修为
+4. **基础资源**：灵草、矿石、妖兽等可采集资源
+5. **初始势力**：1-2个基础宗门，提供入门引导
+
+### LLM集成设计
+
+```
+LLMProvider {
+    provider: ThirdPartyAPI  // OpenAI/Claude/智谱等
+    rate_limiter: TokenBucket
+    circuit_breaker: CircuitBreaker
+    fallback: BehaviorTree
+}
+
+call_llm(context) -> Decision:
+    try:
+        response = provider.generate(context, timeout=10s)
+        return parse_decision(response)
+    catch TimeoutError:
+        metrics.record_fallback()
+        return behavior_tree.decide(context)
+    catch RateLimitError:
+        metrics.record_throttle()
+        wait(backoff_time)
+        retry()
+```
 
 ## Components and Interfaces
 
