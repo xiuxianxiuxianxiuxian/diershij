@@ -102,7 +102,19 @@
 4. WHEN 宗门设立规则（税收、禁区）, THE 系统 SHALL 在宗门势力范围内生效
 5. IF 宗门瓦解, THE 系统 SHALL 释放相关资源并通知成员
 
-### Requirement 7: 天道与因果系统
+### Requirement 7: 极品灵石严格获取机制
+
+**User Story:** AS 世界系统, I WANT 严格控制极品灵石获取途径, SO THAT 防止经济通胀和API成本失控
+
+#### Acceptance Criteria
+
+1. WHEN 角色完成化神期天劫突破, THE 系统 SHALL 奖励100-500极品灵石
+2. WHEN 角色首次发现世界隐藏传说或秘境, THE 系统 SHALL 奖励50-200极品灵石
+3. WHEN 角色自创功法被其他3个不同实体学习, THE 系统 SHALL 奖励200极品灵石
+4. WHEN 世界危机事件被成功平息, THE 系统 SHALL 奖励参与角色50-300极品灵石
+5. IF 角色尝试通过非上述途径获取极品灵石, THE 系统 SHALL 拒绝并记录异常
+
+### Requirement 8: 天道与因果系统
 
 **User Story:** AS 世界规则, I WANT 通过底层机制维持世界秩序, SO THAT 世界能够自我调节而非依赖人为干预
 

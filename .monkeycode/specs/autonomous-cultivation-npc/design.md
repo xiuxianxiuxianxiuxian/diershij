@@ -387,7 +387,59 @@ HeavenlyDao {
 - 功德：救助、传承、贡献
 - 因果纠缠：恩怨、契约、承诺
 
-### 6. 经济演化引擎
+### 6. 极品灵石严格获取机制
+
+**设计原则：**
+- 极品灵石是系统级稀缺资源，用于控制DeepSeek R1 API调用成本
+- 严禁通过常规交易、修炼、采集等方式获取
+- 只有通过重大世界贡献或突破才能获得
+
+```
+PremiumSpiritStoneSystem {
+    // 允许的获取途径（硬编码，不可通过游戏内操作绕过）
+    allowed_sources: [
+        "heavenly_tribulation_breakthrough",  // 化神期天劫突破
+        "world_secret_discovery",             // 首次发现隐藏传说/秘境
+        "method_creator_reward",              // 自创功法被3+实体学习
+        "world_crisis_resolution"             // 世界危机事件平息
+    ]
+    
+    grant(entity_id, source, amount) -> Result:
+        if source not in allowed_sources:
+            return Error("非法获取途径")
+        
+        // 防重复领取检查
+        if source == "heavenly_tribulation_breakthrough":
+            if entity.has_claimed_breakthrough_reward(realm="nascent_soul"):
+                return Error("已领取过突破奖励")
+        
+        if source == "method_creator_reward":
+            method = get_method_by_creator(entity_id)
+            if method.unique_learners < 3:
+                return Error("学习人数不足3人")
+        
+        entity.premium_spirit_stones += amount
+        record_premium_grant(entity_id, source, amount)
+        return Success
+}
+```
+
+**获取途径详细说明：**
+
+| 途径 | 奖励范围 | 触发条件 | 频率限制 |
+|------|----------|----------|----------|
+| 化神期天劫突破 | 100-500 | 成功渡劫化神 | 每角色1次 |
+| 发现隐藏传说/秘境 | 50-200 | 首次探索发现 | 每传说/秘境1次 |
+| 自创功法被学习 | 200 | 3个不同实体学习 | 每功法1次 |
+| 平息世界危机 | 50-300 | 参与并贡献危机事件 | 每次危机1次 |
+
+**全服极品灵石总量控制：**
+- 初始总量：0（系统不预发）
+- 年化产出上限：根据服务器实体数量动态计算
+  - 公式：`annual_max = entity_count * 500`（假设每实体每年最多突破1次）
+- 当全服极品灵石总量超过阈值时，天道系统自动降低后续奖励
+
+### 7. 经济演化引擎
 
 ```
 EconomyEngine {
