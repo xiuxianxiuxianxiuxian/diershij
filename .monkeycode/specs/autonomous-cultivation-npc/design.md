@@ -335,7 +335,7 @@ graph LR
 ```
 CreateMethod {
     validate(entity) -> ValidationResult:
-        if entity.premium_spirit_stones < 10000:
+        if entity.spirit_stones.premium_grade < 10000:
             return Error("自创功法需要10000极品灵石")
         if entity.realm < required_realm:
             return Error("境界不足，无法自创功法")
@@ -344,7 +344,7 @@ CreateMethod {
         return Success
     
     execute(entity, method_data) -> MethodEntity:
-        deduct(entity.premium_spirit_stones, 10000)
+        entity.spirit_stones.premium_grade -= 10000
         method = deepseek_reasoner.validate_and_generate(method_data)
         method.creator_id = entity.id
         method.save()
@@ -437,6 +437,38 @@ PremiumSpiritStoneSystem {
 - 初始总量：0（系统不预发）
 - 年化产出上限：根据服务器实体数量动态计算
   - 公式：`annual_max = entity_count * 500`（假设每实体每年最多突破1次）
+
+### 6.5 灵石体系与兑换比例
+
+**灵石等级与兑换比例：**
+
+```
+1 极品灵石 = 10^11 上品灵石
+1 上品灵石 = 10^9  中品灵石
+1 中品灵石 = 10^4  下品灵石
+
+因此：
+1 极品灵石 = 10^20 中品灵石 = 10^24 下品灵石
+```
+
+**数据模型设计（使用BIGINT存储）：**
+
+```sql
+-- 灵石资产表（分离存储各级灵石，避免精度问题）
+CREATE TABLE entity_spirit_stones (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    low_grade BIGINT DEFAULT 0,     -- 下品灵石 (最多 2^63-1 ≈ 9×10^18)
+    medium_grade BIGINT DEFAULT 0,  -- 中品灵石
+    high_grade BIGINT DEFAULT 0,    -- 上品灵石
+    premium_grade BIGINT DEFAULT 0  -- 极品灵石
+);
+```
+
+**设计说明：**
+- 各级灵石独立存储，不自动兑换
+- 玩家/NPC可通过交易接口手动兑换（需支付手续费）
+- 功法自创消耗的是极品灵石（10000颗），不可用其他等级灵石替代
+- 日常交易主要使用中品/下品灵石，上品灵石已属珍贵，极品灵石为战略级资源
 - 当全服极品灵石总量超过阈值时，天道系统自动降低后续奖励
 
 ### 7. 经济演化引擎
@@ -479,9 +511,16 @@ CREATE TABLE entity_attributes (
     comprehension REAL DEFAULT 0,   -- 悟性
     constitution REAL DEFAULT 0,    -- 根骨
     luck REAL DEFAULT 0,            -- 气运
-    cultivation_progress REAL DEFAULT 0,  -- 修炼进度
-    spirit_stones REAL DEFAULT 0,   -- 灵石（普通）
-    premium_spirit_stones REAL DEFAULT 0  -- 极品灵石
+    cultivation_progress REAL DEFAULT 0  -- 修炼进度
+);
+
+-- 灵石资产表（独立存储各级灵石）
+CREATE TABLE entity_spirit_stones (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    low_grade BIGINT DEFAULT 0,     -- 下品灵石
+    medium_grade BIGINT DEFAULT 0,  -- 中品灵石
+    high_grade BIGINT DEFAULT 0,    -- 上品灵石
+    premium_grade BIGINT DEFAULT 0  -- 极品灵石
 );
 
 -- 功法表
