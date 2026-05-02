@@ -262,6 +262,49 @@ TemplateLibrary {
 
 ## Components and Interfaces
 
+### 0. 规则调用架构
+
+游戏内所有玩家/NPC操作都先进入统一操作总线，再由天道引擎完成规则校验、数值计算、事件触发和状态写回。业务层不直接硬编码规则，只调用引擎接口。
+
+```mermaid
+sequenceDiagram
+    participant Client as "客户端/NPC AI"
+    participant Gateway as "操作网关"
+    participant Service as "游戏应用服务"
+    participant Engine as "天道引擎"
+    participant Rules as "规则模块"
+    participant EventBus as "事件总线"
+    participant Store as "Redis/PostgreSQL"
+
+    Client->>Gateway: 提交 Operation
+    Gateway->>Service: 解析并路由命令
+    Service->>Engine: 构造 RuleContext 并请求判定
+    Engine->>Rules: 执行 Karma/Combat/Breakthrough 等规则
+    Rules-->>Engine: 返回计算结果
+    Engine->>EventBus: 发布领域事件
+    Engine->>Store: 写入状态/日志/流水
+    Engine-->>Service: 返回结果对象
+    Service-->>Gateway: 生成响应
+    Gateway-->>Client: 返回执行结果
+```
+
+**调用原则：**
+- 所有规则参数统一来自 `configs/heavenly-dao-config.yaml`
+- 所有规则调用统一走 `HeavenlyDaoEngine` 接口
+- 所有规则执行都接收 `RuleContext`，避免散落读取全局状态
+- 所有副作用通过 `EventBus` 和 `Repository` 落库，便于回放与审计
+
+**调用文件目录：**
+- `architecture/heavenly_dao/types.go`: 统一类型定义
+- `architecture/heavenly_dao/context.go`: 规则上下文构造
+- `architecture/heavenly_dao/config.go`: 天道配置结构与加载器
+- `architecture/heavenly_dao/engine.go`: 引擎接口与实现入口
+- `architecture/heavenly_dao/karma_rule.go`: 因果业力规则调用
+- `architecture/heavenly_dao/breakthrough_rule.go`: 突破与天劫规则调用
+- `architecture/heavenly_dao/combat_rule.go`: 战斗伤害规则调用
+- `architecture/heavenly_dao/action_service.go`: 业务层如何调用天道引擎
+- `architecture/heavenly_dao/event_bus.go`: 事件总线定义
+
 ### 1. 统一操作接口 (Unified Action Interface)
 
 所有实体（玩家和NPC）的操作都通过统一的命令接口执行：
