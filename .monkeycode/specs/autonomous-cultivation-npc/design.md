@@ -494,6 +494,187 @@ EconomyEngine {
 - 使用移动平均线 + 供需比计算参考价
 - 不干预交易，仅记录和分析
 
+### 8. 天道算法系统（Heavenly Dao Algorithm）
+
+**设计原则：**
+- 天道不是模糊规则，而是严格的数学算法
+- 所有世界平衡、因果、天劫、资源刷新均由算法决定
+- 算法参数公开透明，可通过游戏内观测推导
+
+#### 8.1 因果业力算法
+
+```
+KarmaAlgorithm {
+    // 因果业力计算公式
+    calculate_karma_change(action, actor, target) -> KarmaDelta:
+        base_karma = ACTION_KARMA_MAP[action.type]
+        
+        // 情境修正因子
+        context_multiplier = 1.0
+        context_multiplier *= (1.0 - actor.karma / KARMA_CAP)  // 业力越高，新增业力影响递减
+        context_multiplier *= target.realm_factor()            // 目标境界越高，业力影响越大
+        
+        // 关系修正
+        if actor.has_relationship(target, "mentor"):
+            context_multiplier *= 2.0  // 背叛师门业力翻倍
+        if actor.has_relationship(target, "enemy"):
+            context_multiplier *= 0.5  // 仇杀业力减半
+        
+        return base_karma * context_multiplier
+    
+    // 业力衰减（自然消散）
+    apply_karma_decay(entity, time_elapsed) -> NewKarma:
+        decay_rate = 0.01  // 每小时1%衰减
+        return entity.karma * exp(-decay_rate * time_elapsed)
+}
+```
+
+**因果业力阈值表：**
+
+| 业力范围 | 天道标记 | 影响 |
+|----------|----------|------|
+| 0-100 | 清白 | 无影响 |
+| 100-500 | 微瑕 | 天劫概率+5% |
+| 500-1000 | 业重 | 天劫概率+20%，交易受排斥 |
+| 1000-5000 | 恶贯 | 天劫概率+50%，被天道标记 |
+| 5000+ | 天怒 | 必遭天劫，资源刷新率-50% |
+
+#### 8.2 天劫触发算法
+
+```
+HeavenlyTribulationAlgorithm {
+    // 天劫触发概率计算
+    calculate_tribulation_probability(entity) -> Probability:
+        base_prob = BREAKTHROUGH_BASE_PROB[entity.target_realm]
+        
+        // 业力修正
+        karma_factor = 1.0 + (entity.karma / 1000.0)
+        
+        // 功德修正（降低天劫概率）
+        merit_factor = 1.0 - (entity.merit / 2000.0)
+        merit_factor = max(merit_factor, 0.3)  // 最低30%基础概率
+        
+        // 气运修正
+        luck_factor = 1.0 - (entity.luck / 100.0 * 0.2)
+        
+        // 综合计算
+        prob = base_prob * karma_factor * merit_factor * luck_factor
+        return clamp(prob, 0.1, 0.95)  // 限制在10%-95%之间
+    
+    // 天劫强度计算
+    calculate_tribulation_strength(entity, prob) -> Strength:
+        base_strength = REALM_BASE_STRENGTH[entity.target_realm]
+        
+        // 业力越高，天劫越强
+        strength = base_strength * (1.0 + entity.karma / 500.0)
+        
+        // 近期渡劫者越多，天劫越强（天道平衡）
+        recent_breakthroughs = get_recent_breakthrough_count(days=7)
+        strength *= (1.0 + recent_breakthroughs * 0.1)
+        
+        return strength
+}
+```
+
+#### 8.3 世界平衡算法
+
+```
+WorldBalanceAlgorithm {
+    // 世界生态健康度评估
+    evaluate_world_health() -> HealthMetrics:
+        metrics = {
+            "power_distribution": gini_coefficient(entity_powers),  // 实力基尼系数
+            "resource_circulation": tx_volume_24h / total_resources,  // 资源流通率
+            "sect_diversity": sect_count / entity_count,              // 宗门多样性
+            "karma_distribution": stddev(entity_karma)               // 业力分布标准差
+        }
+        return metrics
+    
+    // 平衡干预策略
+    apply_balance_adjustment(metrics) -> Adjustment:
+        // 实力差距过大时，增加弱者机缘
+        if metrics.power_distribution > 0.7:
+            spawn_opportunity_for_weak_entities()
+        
+        // 资源流通过低时，增加资源刷新
+        if metrics.resource_circulation < 0.01:
+            increase_resource_spawn_rate(1.5)
+        
+        // 宗门过于集中时，增加散修机缘
+        if metrics.sect_diversity < 0.05:
+            spawn_hermit_opportunities()
+        
+        // 业力分布极端时，触发天道清洗
+        if metrics.karma_distribution > 500:
+            trigger_heavenly_cleansing()
+}
+```
+
+#### 8.4 资源刷新算法
+
+```
+ResourceSpawnAlgorithm {
+    // 资源刷新率计算
+    calculate_spawn_rate(resource_type, region) -> SpawnRate:
+        base_rate = RESOURCE_BASE_RATES[resource_type]
+        
+        // 灵气浓度修正
+        spiritual_factor = region.spiritual_density / 100.0
+        
+        // 采集压力修正（最近采集量越多，刷新越慢）
+        recent_harvest = get_recent_harvest(resource_type, region, hours=24)
+        pressure_factor = max(0.1, 1.0 - recent_harvest / base_rate * 10)
+        
+        // 世界平衡修正
+        balance_factor = get_world_balance_factor()
+        
+        return base_rate * spiritual_factor * pressure_factor * balance_factor
+    
+    // 稀有资源出现概率
+    calculate_rare_spawn_chance(region) -> Chance:
+        base_chance = 0.001  // 0.1%基础概率
+        
+        // 灵气品阶修正
+        tier_factor = region.spiritual_tier / 9.0
+        
+        // 探索活跃度修正
+        exploration_factor = get_region_exploration_activity(region)
+        
+        return base_chance * tier_factor * exploration_factor
+}
+```
+
+#### 8.5 势力平衡算法
+
+```
+FactionBalanceAlgorithm {
+    // 势力实力评估
+    evaluate_faction_power(faction) -> PowerScore:
+        member_power = sum(member.combat_power for member in faction.members)
+        resource_control = sum(region.value for region in faction.territory)
+        influence = count_allies(faction) - count_enemies(faction)
+        
+        return member_power * 0.4 + resource_control * 0.4 + influence * 0.2
+    
+    // 制衡策略生成
+    generate_counterbalance(dominant_faction) -> Strategy:
+        // 为弱势势力生成机缘
+        weak_factions = get_factions_below_power_threshold(
+            dominant_faction.power * 0.3
+        )
+        
+        for faction in weak_factions:
+            spawn_opportunity(
+                type="ancient_inheritance",
+                target=faction,
+                power_boost=dominant_faction.power * 0.1
+            )
+        
+        // 增加弱势势力区域资源刷新
+        increase_resource_spawn_in_territory(weak_factions, multiplier=1.5)
+}
+```
+
 ## Data Models
 
 ### 1. 角色数据模型

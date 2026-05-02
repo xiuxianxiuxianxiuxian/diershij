@@ -116,17 +116,17 @@
 4. WHEN 世界危机事件被成功平息, THE 系统 SHALL 奖励对危机有决定性贡献的角色1-5极品灵石
 5. IF 角色尝试通过非上述途径获取极品灵石, THE 系统 SHALL 拒绝并记录异常
 
-### Requirement 8: 天道与因果系统
+### Requirement 8: 天道算法系统
 
-**User Story:** AS 世界规则, I WANT 通过底层机制维持世界秩序, SO THAT 世界能够自我调节而非依赖人为干预
+**User Story:** AS 世界规则, I WANT 通过严格的数学算法维持世界秩序, SO THAT 世界能够自我调节而非依赖人为干预
 
 #### Acceptance Criteria
 
-1. WHEN 角色做出重大行为, THE 系统 SHALL 记录因果业力值
-2. WHEN 业力值触发阈值, THE 系统 SHALL 引入天劫或机缘进行平衡
-3. WHILE 世界运行中, THE 系统 SHALL 周期性评估世界生态健康度
-4. WHEN 触发世界危机事件, THE 系统 SHALL 生成妖兽潮、天魔入侵等事件
-5. IF 某势力过于强大, THE 系统 SHALL 通过自然机制（非人为干预）引入制衡因素
+1. WHEN 角色执行任何行为, THE 系统 SHALL 根据天道算法计算因果业力值变化
+2. WHEN 因果业力值超过阈值, THE 系统 SHALL 根据算法公式计算天劫触发概率
+3. WHILE 世界运行中, THE 系统 SHALL 每周期运行世界平衡算法, 评估生态健康度
+4. WHEN 触发世界危机事件, THE 系统 SHALL 根据当前世界状态算法生成事件参数
+5. IF 某势力过于强大, THE 系统 SHALL 通过算法自动引入制衡因素（非人为干预）
 
 ### Requirement 8: 多人在线同步
 
