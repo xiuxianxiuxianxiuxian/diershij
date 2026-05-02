@@ -60,6 +60,40 @@ func NewEntityRepository(db *Database, redis *redis.Client) *EntityRepository {
     return &EntityRepository{db: db, redis: redis}
 }
 
+func (r *EntityRepository) GetByName(ctx context.Context, name string) (*types.Entity, error) {
+    query := `SELECT id, entity_type, name, realm, region_id, x, y, status, created_at, updated_at 
+               FROM entities WHERE name = $1`
+    
+    var entity types.Entity
+    var pos struct {
+        RegionID string
+        X, Y     float64
+    }
+    
+    err := r.db.Pool().QueryRow(ctx, query, name).Scan(
+        &entity.ID, &entity.EntityType, &entity.Name, &entity.Realm,
+        &pos.RegionID, &pos.X, &pos.Y, &entity.Status,
+        &entity.CreatedAt, &entity.UpdatedAt,
+    )
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    entity.Position = types.WorldPosition{
+        RegionID: pos.RegionID,
+        X:        pos.X,
+        Y:        pos.Y,
+    }
+    
+    attributes, _ := r.GetAttributes(ctx, entity.ID)
+    if attributes != nil {
+        entity.Attributes = *attributes
+    }
+    
+    return &entity, nil
+}
+
 func (r *EntityRepository) Create(ctx context.Context, entity *types.Entity) error {
     query := `
         INSERT INTO entities (id, entity_type, name, realm, region_id, x, y, status, created_at, updated_at)

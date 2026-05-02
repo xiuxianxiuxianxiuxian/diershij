@@ -5,6 +5,7 @@ package cultivation;
 option go_package = "github.com/cultivation-world/shared/proto;cultivation";
 
 import "entity.proto";
+import "world.proto";
 
 service HeavenlyDaoService {
     rpc EvaluateKarma(KarmaRequest) returns (KarmaResponse);

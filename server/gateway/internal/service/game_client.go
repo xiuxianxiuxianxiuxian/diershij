@@ -2,15 +2,18 @@ package service
 
 import (
     "context"
+    "fmt"
     "time"
 
+    "github.com/cultivation-world/shared/proto/pb"
     "github.com/cultivation-world/shared/types"
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 )
 
 type GameServiceClient struct {
-    conn *grpc.ClientConn
+    conn       *grpc.ClientConn
+    gameClient pb.GameServiceClient
 }
 
 func NewGameServiceClient(host string, port int) (*GameServiceClient, error) {
@@ -20,7 +23,10 @@ func NewGameServiceClient(host string, port int) (*GameServiceClient, error) {
         return nil, err
     }
 
-    return &GameServiceClient{conn: conn}, nil
+    return &GameServiceClient{
+        conn:       conn,
+        gameClient: pb.NewGameServiceClient(conn),
+    }, nil
 }
 
 func (c *GameServiceClient) Close() error {
@@ -36,7 +42,7 @@ func (c *GameServiceClient) ExecuteOperation(op *types.Operation) (*types.Operat
         params[k] = fmt.Sprintf("%v", v)
     }
 
-    resp, err := c.gameClient.ExecuteOperation(ctx, &game.OperationRequest{
+    resp, err := c.gameClient.ExecuteOperation(ctx, &pb.OperationRequest{
         OperationId: op.ID,
         ActorId:     string(op.ActorID),
         ActionType:  string(op.ActionType),
@@ -48,16 +54,21 @@ func (c *GameServiceClient) ExecuteOperation(op *types.Operation) (*types.Operat
         return nil, err
     }
 
+    effects := make(map[string]interface{})
+    for k, v := range resp.Effects {
+        effects[k] = v
+    }
+
     return &types.OperationResult{
         Success:   resp.Success,
         Message:   resp.Message,
-        Effects:   make(map[string]interface{}),
+        Effects:   effects,
         Timestamp: resp.Timestamp,
     }, nil
 }
 
 func (c *GameServiceClient) CreateEntity(ctx context.Context, username, password string, entityType types.EntityType) (*types.Entity, error) {
-    resp, err := c.gameClient.CreateEntity(ctx, &game.CreateEntityRequest{
+    resp, err := c.gameClient.CreateEntity(ctx, &pb.CreateEntityRequest{
         Name:       username,
         EntityType: string(entityType),
     })
@@ -70,7 +81,7 @@ func (c *GameServiceClient) CreateEntity(ctx context.Context, username, password
 }
 
 func (c *GameServiceClient) AuthenticateEntity(ctx context.Context, username, password string) (*types.Entity, error) {
-    resp, err := c.gameClient.AuthenticateEntity(ctx, &game.AuthRequest{
+    resp, err := c.gameClient.AuthenticateEntity(ctx, &pb.AuthRequest{
         Username: username,
         Password: password,
     })
@@ -83,7 +94,7 @@ func (c *GameServiceClient) AuthenticateEntity(ctx context.Context, username, pa
 }
 
 func (c *GameServiceClient) GetEntity(ctx context.Context, entityID types.EntityID) (*types.Entity, error) {
-    resp, err := c.gameClient.GetEntity(ctx, &game.EntityRequest{
+    resp, err := c.gameClient.GetEntity(ctx, &pb.EntityRequest{
         EntityId: string(entityID),
     })
 
@@ -94,7 +105,7 @@ func (c *GameServiceClient) GetEntity(ctx context.Context, entityID types.Entity
     return protoToEntity(resp.Entity), nil
 }
 
-func protoToEntity(e *game.Entity) *types.Entity {
+func protoToEntity(e *pb.Entity) *types.Entity {
     if e == nil {
         return nil
     }

@@ -2,6 +2,8 @@ package types
 
 import "time"
 
+type OperationID string
+
 type ActionType string
 
 const (
@@ -33,7 +35,7 @@ type Operation struct {
 
 func NewOperation(actorID EntityID, actionType ActionType, params map[string]interface{}) *Operation {
     return &Operation{
-        ID:         generateOperationID(),
+        ID:         string(GenerateOperationID()),
         ActorID:    actorID,
         ActionType: actionType,
         Params:     params,

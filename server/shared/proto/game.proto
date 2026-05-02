@@ -10,8 +10,29 @@ import "world.proto";
 service GameService {
     rpc ExecuteOperation(OperationRequest) returns (OperationResponse);
     rpc GetEntity(EntityRequest) returns (EntityResponse);
+    rpc CreateEntity(CreateEntityRequest) returns (CreateEntityResponse);
+    rpc AuthenticateEntity(AuthRequest) returns (AuthResponse);
     rpc SyncState(SyncRequest) returns (SyncResponse);
     rpc StreamEntityUpdates(EntityStreamRequest) returns (stream EntityUpdate);
+}
+
+message CreateEntityRequest {
+    string name = 1;
+    string entity_type = 2;
+}
+
+message CreateEntityResponse {
+    Entity entity = 1;
+}
+
+message AuthRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message AuthResponse {
+    Entity entity = 1;
+    bool success = 2;
 }
 
 message OperationRequest {

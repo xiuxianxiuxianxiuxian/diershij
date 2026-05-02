@@ -1,12 +1,14 @@
 package main
 
 import (
+    "fmt"
     "log"
     "net"
     "os"
 
     "github.com/cultivation-world/game-server/internal/repository"
     "github.com/cultivation-world/game-server/internal/service"
+    "github.com/cultivation-world/shared/proto/pb"
     "github.com/cultivation-world/shared/config"
     "google.golang.org/grpc"
 )
@@ -28,22 +30,20 @@ func main() {
     gameSvc := service.NewGameService(entityRepo, operationSvc)
 
     grpcServer := grpc.NewServer()
-    game.RegisterGameServiceServer(grpcServer, gameSvc)
+    pb.RegisterGameServiceServer(grpcServer, gameSvc)
 
-    lis, err := net.Listen("tcp", ":50051")
+    port := 50051
+    if p := os.Getenv("GRPC_PORT"); p != "" {
+        fmt.Sscanf(p, "%d", &port)
+    }
+
+    lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)
     }
 
-    log.Printf("Game Server starting on :50051")
+    log.Printf("Game Server starting on :%d", port)
     if err := grpcServer.Serve(lis); err != nil {
         log.Fatalf("Failed to serve: %v", err)
     }
-}
-
-func getEnv(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
 }

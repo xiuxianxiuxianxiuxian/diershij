@@ -1,11 +1,18 @@
 package types
 
-import "github.com/google/uuid"
+import (
+    "crypto/rand"
+    "encoding/hex"
+)
 
-func generateOperationID() string {
-    return uuid.New().String()
+func GenerateOperationID() OperationID {
+    b := make([]byte, 16)
+    rand.Read(b)
+    return OperationID(hex.EncodeToString(b))
 }
 
 func GenerateEntityID() EntityID {
-    return EntityID(uuid.New().String())
+    b := make([]byte, 16)
+    rand.Read(b)
+    return EntityID(hex.EncodeToString(b))
 }
