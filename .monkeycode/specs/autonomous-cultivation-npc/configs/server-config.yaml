@@ -1,0 +1,56 @@
+# ==========================================
+# 游戏服务器配置
+# ==========================================
+# 存放于: configs/server-config.yaml
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  node_name: "node-1"
+  max_entities: 1000
+  tick_interval_ms: 1000
+  graceful_shutdown_timeout_s: 30
+
+database:
+  url: "postgresql://user:password@localhost:5432/cultivation_world"
+  max_connections: 100
+  idle_timeout_s: 300
+  connection_timeout_s: 10
+
+redis:
+  url: "redis://localhost:6379"
+  max_connections: 50
+  key_prefix: "cultivation:"
+
+websocket:
+  ping_interval_s: 30
+  pong_timeout_s: 10
+  max_message_size_bytes: 65536
+  max_connections_per_ip: 10
+
+ai:
+  provider: "deepseek"
+  template_match_threshold: 0.5
+  max_tokens_per_call: 500
+  fallback_chain:
+    - "deepseek-chat"
+    - "deepseek-reasoner"
+    - "behavior_tree"
+    - "silent"
+
+logging:
+  level: "info"
+  format: "json"
+  output:
+    - "stdout"
+    - "file"
+  file:
+    path: "/var/log/cultivation-world/server.log"
+    max_size_mb: 100
+    max_backups: 10
+    compress: true
+
+metrics:
+  enabled: true
+  port: 9090
+  health_check_interval_s: 30

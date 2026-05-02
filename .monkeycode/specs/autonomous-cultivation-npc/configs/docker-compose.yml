@@ -1,0 +1,106 @@
+# ==========================================
+# Docker Compose 配置
+# ==========================================
+# 用于本地开发和测试环境
+
+version: "3.8"
+
+services:
+  # ===== 游戏服务器 =====
+  game-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cultivation-world-server
+    ports:
+      - "8080:8080"   # WebSocket/HTTP
+      - "9090:9090"   # Metrics
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cultivation_world
+      - REDIS_URL=redis://redis:6379
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - cultivation-network
+
+  # ===== PostgreSQL 数据库 =====
+  postgres:
+    image: postgres:16-alpine
+    container_name: cultivation-world-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=cultivation_world
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./models:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cultivation-network
+
+  # ===== Redis 缓存 =====
+  redis:
+    image: redis:7-alpine
+    container_name: cultivation-world-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cultivation-network
+
+  # ===== pgAdmin (数据库管理) =====
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: cultivation-world-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - cultivation-network
+
+  # ===== Redis Insight (缓存管理) =====
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: cultivation-world-redis-insight
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - cultivation-network
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  cultivation-network:
+    driver: bridge

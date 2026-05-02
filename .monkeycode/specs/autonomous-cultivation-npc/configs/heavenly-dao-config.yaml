@@ -1,0 +1,172 @@
+# ==========================================
+# 天道算法参数配置
+# ==========================================
+# 存放于: configs/heavenly-dao-config.yaml
+# 这些参数决定世界的底层规则
+
+# ===== 因果业力参数 =====
+karma:
+  decay_rate_per_hour: 0.01        # 每小时业力自然衰减率
+  cap: 10000                       # 业力上限
+  
+  thresholds:
+    clean: { min: 0, max: 100, tribulation_bonus: 0, label: "清白" }
+    minor_flaw: { min: 100, max: 500, tribulation_bonus: 0.05, label: "微瑕" }
+    heavy_karma: { min: 500, max: 1000, tribulation_bonus: 0.2, label: "业重" }
+    evil: { min: 1000, max: 5000, tribulation_bonus: 0.5, label: "恶贯" }
+    heavenly_wrath: { min: 5000, max: 999999, tribulation_bonus: 1.0, label: "天怒" }
+
+  action_karma:
+    kill_innocent: 500
+    kill_cultivator: 200
+    betray_master: 300
+    save_life: -200
+    help_weak: -50
+    steal: 100
+
+# ===== 天劫参数 =====
+tribulation:
+  base_probability:
+    qi_condensation: 0.1
+    foundation: 0.15
+    golden_core: 0.2
+    nascent_soul: 0.3
+    soul_transformation: 0.5
+    void_refinement: 0.6
+    integration: 0.7
+    mahayana: 0.8
+    tribulation: 0.9
+  
+  strength_multiplier_per_karma: 1.002  # 每点业力增加天劫强度
+  recent_breakthrough_window_days: 7
+  recent_breakthrough_strength_bonus: 0.1  # 每多一人渡劫 +10% 强度
+
+# ===== 寿命参数 =====
+lifespan:
+  mortal: 80
+  qi_condensation: 120
+  foundation: 200
+  golden_core: 500
+  nascent_soul: 1000
+  soul_transformation: 3000
+  void_refinement: 5000
+  integration: 8000
+  mahayana: 10000
+  tribulation: 15000
+
+  aging_penalty:
+    threshold_50pct: 0      # 50% 寿命以上无影响
+    threshold_20pct: 0.09   # 20%-50% 寿命，最多 -9%
+    threshold_10pct: 0.14   # 10%-20% 寿命，最多 -14%
+    final_10pct: 0.20       # 最后 10%，-20%
+
+# ===== 修炼效率参数 =====
+cultivation:
+  base_rate_multiplier: 0.1
+  realm_penalty_factor: 0.2  # 每高一个境界修炼速度 / (1 + level * 0.2)
+
+# ===== 突破参数 =====
+breakthrough:
+  base_success_rate:
+    qi_condensation: 0.6
+    foundation: 0.4
+    golden_core: 0.25
+    nascent_soul: 0.15
+    soul_transformation: 0.1
+    void_refinement: 0.08
+    integration: 0.05
+    mahayana: 0.03
+    tribulation: 0.01
+  
+  max_success_rate: 0.8
+  min_success_rate: 0.05
+  
+  failure_penalty:
+    cultivation_loss_percent: 0.1
+    cooldown_hours_per_realm: 24
+    mental_damage: 20
+    injury_chance: 0.3
+
+# ===== 战斗参数 =====
+combat:
+  realm_suppression_per_level: 0.15  # 每高一个境界 +15% 伤害
+  element_counters:
+    fire_metal: 1.5
+    fire_wood: 1.3
+    water_fire: 1.5
+    wood_earth: 1.5
+    metal_wood: 1.5
+    earth_water: 1.5
+  base_crit_rate: 0.05
+  base_crit_damage: 1.5
+
+# ===== 功法冲突参数 =====
+method_compatibility:
+  opposite_element_conflict: 0.5
+  alignment_conflict: 0.3
+  realm_gap_conflict: 0.2
+  
+  backlash_probability:
+    below_0.2: 0.0
+    below_0.5: 0.1
+    below_0.8: 0.3
+    above_0.8: 0.6
+
+# ===== 炼丹参数 =====
+alchemy:
+  explosion_chance_on_failure: 0.2
+  wasted_materials_chance: 0.5
+  failed_pill_chance: 0.3
+
+# ===== 灵根觉醒参数 =====
+spiritual_root:
+  base_awakening_chance: 0.001
+  per_year_cultivation_bonus: 0.1
+  per_breakthrough_bonus: 0.2
+
+# ===== 灵气潮汐参数 =====
+spiritual_tide:
+  cycle_days: 365
+  rising_multiplier: 1.3
+  ebbing_multiplier: 0.7
+  threshold_rising: 0.5
+  threshold_ebbing: -0.5
+
+# ===== 妖兽生成参数 =====
+demon_beast:
+  base_spawn_rate_per_danger_level: 10
+  human_activity_suppression: 0.5
+  tide_multiplier_max: 3.0
+
+# ===== 交易税收参数 =====
+trade_tax:
+  heavenly_base_rate: 0.01
+  high_value_threshold_1: 100000
+  high_value_rate_1: 0.012
+  high_value_threshold_2: 1000000
+  high_value_rate_2: 0.015
+
+# ===== 心魔参数 =====
+inner_demon:
+  base_daily_chance: 0.001
+  per_obsession_bonus: 0.05
+  breakthrough_stress_multiplier: 2.0
+  defeat_qi_deviation_chance: 0.3
+
+# ===== 世界平衡参数 =====
+world_balance:
+  power_gini_threshold: 0.7
+  resource_circulation_threshold: 0.01
+  sect_diversity_threshold: 0.05
+  karma_stddev_threshold: 500
+
+# ===== 极品灵石获取参数 =====
+premium_spirit_stones:
+  sources:
+    heavenly_tribulation_breakthrough: { min: 1, max: 3, per_entity_once: true }
+    world_secret_discovery: { min: 0, max: 1, per_secret_once: true }
+    method_creator_reward: { min: 5, max: 10, requires_learners: 10 }
+    world_crisis_resolution: { min: 1, max: 5, per_crisis_once: true }
+  
+  annual_max_per_entity: 3
+  function_creation_cost: 10000

@@ -1,0 +1,267 @@
+# ==========================================
+# 世界初始化配置
+# ==========================================
+# 存放于: configs/world-init-config.yaml
+
+world:
+  seed: 42
+  template: "default_5_realms"
+  epoch_name: "开天纪元"
+
+# ===== 区域初始化 =====
+regions:
+  - id: "east_wilds"
+    name: "东荒域"
+    parent: null
+    spiritual_density: 60
+    spiritual_tier: 3
+    danger_level: 1
+    children:
+      - name: "青云镇"
+        type: "mortal_town"
+        spiritual_density: 30
+        danger_level: 0
+        is_spawn_point: true
+      - name: "灵雾山脉"
+        type: "cultivation_area"
+        spiritual_density: 70
+        danger_level: 2
+      - name: "黑风秘境"
+        type: "secret_realm"
+        spiritual_density: 80
+        danger_level: 4
+        is_locked: true
+        unlock_condition: { realm: "foundation" }
+      - name: "落日沼泽"
+        type: "resource_area"
+        spiritual_density: 50
+        danger_level: 2
+
+  - id: "south_ridges"
+    name: "南岭域"
+    parent: null
+    spiritual_density: 70
+    spiritual_tier: 4
+    danger_level: 2
+    children:
+      - name: "赤炎城"
+        type: "cultivation_city"
+        spiritual_density: 65
+        danger_level: 1
+      - name: "焚天谷"
+        type: "elemental_area"
+        element: "fire"
+        spiritual_density: 85
+        danger_level: 4
+      - name: "万兽山脉"
+        type: "beast_area"
+        spiritual_density: 75
+        danger_level: 5
+
+  - id: "west_desert"
+    name: "西漠域"
+    parent: null
+    spiritual_density: 40
+    spiritual_tier: 2
+    danger_level: 3
+    children:
+      - name: "黄沙古城"
+        type: "ruins"
+        spiritual_density: 45
+        danger_level: 3
+        has_lore: true
+      - name: "月牙绿洲"
+        type: "neutral_zone"
+        spiritual_density: 50
+        danger_level: 1
+        is_trade_hub: true
+
+  - id: "north_plains"
+    name: "北原域"
+    parent: null
+    spiritual_density: 55
+    spiritual_tier: 3
+    danger_level: 4
+    children:
+      - name: "冰封神殿"
+        type: "secret_realm"
+        spiritual_density: 90
+        danger_level: 6
+        is_locked: true
+        unlock_condition: { realm: "golden_core" }
+      - name: "雪原部落"
+        type: "hermit_settlement"
+        spiritual_density: 50
+        danger_level: 2
+
+  - id: "central_domain"
+    name: "中州域"
+    parent: null
+    spiritual_density: 80
+    spiritual_tier: 5
+    danger_level: 2
+    children:
+      - name: "天道城"
+        type: "world_center"
+        spiritual_density: 85
+        danger_level: 1
+      - name: "天机阁"
+        type: "knowledge_hub"
+        spiritual_density: 75
+        danger_level: 1
+        is_trade_hub: true
+
+# ===== 初始宗门 =====
+sects:
+  - name: "青云宗"
+    alignment: "righteous"
+    philosophy: "修身齐家，济世安民"
+    region: "east_wilds/青云镇"
+    entry_requirements:
+      min_age: 12
+      max_age: 25
+      min_spiritual_root_purity: 40
+    tax_rate: 0.05
+    initial_members: 15
+
+  - name: "血煞殿"
+    alignment: "demonic"
+    philosophy: "强者为尊，适者生存"
+    region: "south_ridges/焚天谷"
+    entry_requirements:
+      min_age: 16
+      combat_trial: true
+    tax_rate: 0.08
+    initial_members: 10
+
+  - name: "天机阁"
+    alignment: "neutral"
+    philosophy: "知识无价，万法归宗"
+    region: "central_domain/天机阁"
+    entry_requirements:
+      intelligence_test: true
+    tax_rate: 0.03
+    initial_members: 8
+
+# ===== 初始 NPC 配置 =====
+npcs:
+  total_count: 50
+  
+  realm_distribution:
+    qi_condensation: 0.60   # 30 个
+    foundation: 0.25        # 12-13 个
+    golden_core: 0.10       # 5 个
+    nascent_soul: 0.05      # 2-3 个
+
+  personality_distribution:
+    righteous: 0.35
+    neutral: 0.40
+    demonic: 0.15
+    hermit: 0.10
+
+  templates:
+    - name: "wandering_cultivator"
+      count: 15
+      realm: "qi_condensation"
+      behavior: "explore_and_cultivate"
+    
+    - name: "sect_elder"
+      count: 6
+      realm: "golden_core"
+      behavior: "sect_management"
+    
+    - name: "merchant"
+      count: 8
+      realm: "foundation"
+      behavior: "trade_and_travel"
+    
+    - name: "hidden_master"
+      count: 3
+      realm: "nascent_soul"
+      behavior: "meditate_and_observe"
+    
+    - name: "young_disciple"
+      count: 12
+      realm: "qi_condensation"
+      behavior: "train_and_socialize"
+    
+    - name: "alchemist"
+      count: 3
+      realm: "foundation"
+      behavior: "craft_and_trade"
+    
+    - name: "beast_hunter"
+      count: 3
+      realm: "foundation"
+      behavior: "hunt_and_explore"
+
+# ===== 世界传说与历史 =====
+world_lore:
+  - title: "万年前的正魔大战"
+    category: "great_war"
+    content: "万年前正道与魔道爆发全面战争，数位化神大能陨落，留下多处战场遗迹。"
+    related_regions: ["east_wilds", "south_ridges"]
+    is_discovered: false
+
+  - title: "天道异变"
+    category: "heavenly_change"
+    content: "三百年前灵气潮汐爆发，导致境界上限从元婴突破至化神。"
+    related_regions: ["central_domain"]
+    is_discovered: true
+
+  - title: "陨落大能洞府"
+    category: "ruins"
+    content: "数位在正魔大战中陨落的大能，其洞府散落于各域，等待有缘人发现。"
+    related_regions: ["east_wilds", "south_ridges", "north_plains"]
+    is_discovered: false
+
+  - title: "天机阁秘录"
+    category: "knowledge"
+    content: "天机阁收藏着上古功法残卷，据说记载着失传的炼虚期功法。"
+    related_regions: ["central_domain/天机阁"]
+    is_discovered: true
+
+# ===== 初始资源分布 =====
+resources:
+  herbs:
+    - name: "凝气草"
+      tier: 1
+      regions: ["east_wilds/灵雾山脉", "south_ridges/焚天谷"]
+      spawn_rate: 10
+    
+    - name: "百年人参"
+      tier: 3
+      regions: ["east_wilds/黑风秘境", "north_plains/雪原部落"]
+      spawn_rate: 2
+    
+    - name: "千年灵芝"
+      tier: 5
+      regions: ["central_domain/天道城"]
+      spawn_rate: 0.1
+
+  ores:
+    - name: "精铁矿石"
+      tier: 1
+      regions: ["south_ridges/焚天谷"]
+      spawn_rate: 8
+    
+    - name: "玄铁母"
+      tier: 4
+      regions: ["north_plains/冰封神殿"]
+      spawn_rate: 0.5
+
+  beasts:
+    - name: "低阶妖兽"
+      level_range: [1, 3]
+      regions: ["east_wilds/灵雾山脉"]
+      spawn_rate: 15
+    
+    - name: "中阶妖兽"
+      level_range: [4, 6]
+      regions: ["south_ridges/万兽山脉"]
+      spawn_rate: 8
+    
+    - name: "高阶妖兽"
+      level_range: [7, 9]
+      regions: ["north_plains/冰封神殿"]
+      spawn_rate: 1
