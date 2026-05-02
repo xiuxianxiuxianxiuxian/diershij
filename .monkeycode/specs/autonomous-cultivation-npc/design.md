@@ -1648,15 +1648,20 @@ FactionBalanceAlgorithm {
 
 所有数据库模型已拆分至独立文件，存放于 `models/` 目录下：
 
-| 文件名 | 模块内容 | 表数量 |
-|--------|----------|--------|
-| `01_entity_core.sql` | 实体核心表、83 项属性（基础/战斗/心境/寿元/财富/特殊/法则/大道） | 9 |
-| `02_cultivation_methods.sql` | 灵根系统、功法库（60+ 属性）、功法关联 | 3 |
-| `03_world_structure.sql` | 区域层级、宗门势力、宗门成员、世界历史传说 | 4 |
-| `04_social_economy.sql` | 生活技能、社交声望、因果业力、灵石资产、交易记录、关系网络 | 6 |
-| `05_npc_ai.sql` | NPC 人格配置、LLM/行为树决策日志 | 2 |
+| 文件名 | 模块内容 | 表数量 | 核心表 |
+|--------|----------|--------|--------|
+| `01_entity_core.sql` | 实体核心与属性 | 9 | entities, base_attributes, combat_attributes, mental_attributes, lifespan_status, wealth_attributes, special_attributes, law_attributes, dao_attributes |
+| `02_cultivation_methods.sql` | 修仙与功法体系 | 3 | spiritual_roots, cultivation_methods, entity_methods |
+| `03_world_structure.sql` | 世界结构与势力 | 4 | world_regions, sects, sect_members, world_lore |
+| `04_social_economy.sql` | 社交与经济体系 | 6 | life_skills, social_attributes, karma_attributes, spirit_stones, transactions, npc_relationships |
+| `05_npc_ai.sql` | AI 决策模块 | 2 | npc_personalities, npc_decision_log |
+| `06_heavenly_dao.sql` | 天道系统与事件 | 7 | heavenly_dao_logs, heavenly_tribulations, world_crises, karma_transactions, spiritual_tides, world_epochs, resource_spawns |
+| `07_items_equipment.sql` | 物品装备与道具 | 8 | item_templates, entity_inventory, entity_equipment, pills, artifacts, talismans, recipes, materials |
+| `08_residence_relations.sql` | 洞府与人际关系 | 8 | residences, residence_buildings, spirit_fields, spirit_veins, entity_beasts, dao_partners, master_disciple, sworn_siblings |
+| `09_combat_skills.sql` | 战斗技能与行为记录 | 7 | combat_logs, skills, entity_skills, operation_logs, behavior_templates, world_messages, exploration_logs |
+| `10_system_infra.sql` | 系统配置与基础设施 | 8 | system_config, server_status, world_seeds, npc_templates, world_initial_data, version_history, cache_data, audit_logs |
 
-**总计：24 个核心数据表**
+**总计：62 个核心数据表**
 
 ### 2. 世界状态数据模型
 
