@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package cultivation;
+
+option go_package = "github.com/cultivation-world/shared/proto;cultivation";
+
+service AISchedulerService {
+    rpc ScheduleDecision(DecisionRequest) returns (DecisionResponse);
+    rpc ExecuteBehaviorTree(BehaviorTreeRequest) returns (BehaviorTreeResponse);
+    rpc RegisterNPC(NPCRegisterRequest) returns (NPCRegisterResponse);
+    rpc UnregisterNPC(NPCUnregisterRequest) returns (NPCUnregisterResponse);
+}
+
+message DecisionRequest {
+    string npc_id = 1;
+    string context = 2;
+    repeated string available_actions = 3;
+    int32 priority = 4;
+}
+
+message DecisionResponse {
+    string action = 1;
+    map<string, string> params = 2;
+    string reasoning = 3;
+    string source = 4;
+    int32 token_cost = 5;
+}
+
+message BehaviorTreeRequest {
+    string npc_id = 1;
+    string tree_name = 2;
+    map<string, string> context = 3;
+}
+
+message BehaviorTreeResponse {
+    string action = 1;
+    map<string, string> params = 2;
+    bool success = 3;
+}
+
+message NPCRegisterRequest {
+    string npc_id = 1;
+    string personality_type = 2;
+    string moral_alignment = 3;
+    int32 ambition_level = 4;
+    double risk_tolerance = 5;
+    string background_story = 6;
+    string current_goal = 7;
+}
+
+message NPCRegisterResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message NPCUnregisterRequest {
+    string npc_id = 1;
+}
+
+message NPCUnregisterResponse {
+    bool success = 1;
+}

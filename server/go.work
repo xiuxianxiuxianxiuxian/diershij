@@ -1,0 +1,10 @@
+go 1.21
+
+use (
+    ./shared
+    ./gateway
+    ./game-server
+    ./heavenly-dao
+    ./ai-scheduler
+    ./world-engine
+)

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package cultivation;
+
+option go_package = "github.com/cultivation-world/shared/proto;cultivation";
+
+import "entity.proto";
+import "world.proto";
+
+service HeavenlyDaoService {
+    rpc EvaluateKarma(KarmaRequest) returns (KarmaResponse);
+    rpc CheckTribulation(TribulationRequest) returns (TribulationResponse);
+    rpc BalanceCheck(BalanceCheckRequest) returns (BalanceCheckResponse);
+    rpc ApplyKarmaDecay(DecayRequest) returns (DecayResponse);
+}
+
+message KarmaRequest {
+    string entity_id = 1;
+    string action_type = 2;
+    string target_id = 3;
+    map<string, string> context = 4;
+}
+
+message KarmaResponse {
+    int32 karma_change = 1;
+    int32 merit_change = 2;
+    string heavenly_mark = 3;
+    string reason = 4;
+}
+
+message TribulationRequest {
+    string entity_id = 1;
+    string target_realm = 2;
+}
+
+message TribulationResponse {
+    bool will_trigger = 1;
+    double probability = 2;
+    double strength = 3;
+    string tribulation_type = 4;
+}
+
+message BalanceCheckRequest {}
+
+message BalanceCheckResponse {
+    bool needs_adjustment = 1;
+    repeated string adjustments = 2;
+    BalanceMetrics metrics = 3;
+}
+
+message DecayRequest {
+    string entity_id = 1;
+    int64 time_elapsed = 2;
+}
+
+message DecayResponse {
+    int32 old_karma = 1;
+    int32 new_karma = 2;
+    int32 decay_amount = 3;
+}
