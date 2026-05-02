@@ -107,29 +107,105 @@ WorldInitializer {
     spawn_initial_npcs(count, distribution) -> list[Entity]
     place_resources(density, rarity_curve) -> ResourceMap
     establish_initial_factions() -> FactionGraph
+    generate_world_lore() -> WorldHistory
+    spawn_special_locations() -> SpecialLocations
 }
 ```
 
-**预置内容范围：**
-1. **基础地图结构**：3-5个主区域（凡人城镇、灵气山林、险地秘境等），区域间有连接路径
-2. **灵气节点分布**：不同浓度的灵气点，影响修炼效率
-3. **初始NPC**：20-50个引导NPC，具有不同性格、背景和初始修为
-4. **基础资源**：灵草、矿石、妖兽等可采集资源
-5. **初始势力**：1-2个基础宗门，提供入门引导
+**预置内容详细设计：**
+
+1. **地图结构（区域层级）**
+   ```
+   世界根节点
+   ├── 东荒域（主区域）
+   │   ├── 青云镇（凡人城镇 - 新手起点）
+   │   ├── 灵雾山脉（灵气山林 - 初级修炼地）
+   │   ├── 黑风秘境（险地 - 中级探索）
+   │   └── 落日沼泽（资源区 - 灵草/毒物）
+   ├── 南岭域（主区域）
+   │   ├── 赤炎城（修真城市）
+   │   ├── 焚天谷（火属性灵地）
+   │   └── 万兽山脉（妖兽聚集地）
+   ├── 西漠域（主区域）
+   │   ├── 黄沙古城（遗迹）
+   │   └── 月牙绿洲（中立交易区）
+   ├── 北原域（主区域）
+   │   ├── 冰封神殿（高阶秘境）
+   │   └── 雪原部落（散修聚落）
+   └── 中州域（核心区域）
+       ├── 天道城（世界中心）
+       └── 天机阁（功法交易/传承地）
+   ```
+
+2. **灵气节点系统**
+   - 灵气浓度分9品（1品最低，9品最高）
+   - 每个区域有1-3个主要灵脉节点
+   - 灵气浓度影响修炼效率和突破概率
+   - 灵脉可被宗门占据或破坏
+
+3. **初始NPC群体（50-100个）**
+   - **修为分布**：
+     - 炼气期：60%（30-60个）- 底层修士
+     - 筑基期：25%（12-25个）- 中坚力量
+     - 金丹期：10%（5-10个）- 区域强者
+     - 元婴期：5%（2-5个）- 世界"锚点"，影响格局
+   - **性格分布**：正道、中立、魔道、隐修等
+   - **背景故事**：每个NPC有独特的出身、目标、恩怨关系
+   - **初始行为倾向**：部分NPC已有初步势力或合作关系
+
+4. **资源分布**
+   - **灵草类**：不同品阶分布在不同灵气区域
+   - **矿石类**：山脉、洞穴中分布
+   - **妖兽**：各区域有不同等级妖兽，提供材料和威胁
+   - **灵气泉眼**：稀有资源，可被占据
+
+5. **初始宗门势力（2-3个）**
+   - **青云宗**（正道）- 位于东荒域，收徒门槛低，理念"修身齐家"
+   - **血煞殿**（魔道）- 位于南岭域，实力至上，理念"强者为尊"
+   - **天机阁**（中立）- 位于中州域，功法交易、情报收集，理念"知识无价"
+
+6. **世界历史与传说**
+   - **上古大战**：万年前的正魔大战，留下多处遗迹
+   - **陨落大能**：数位化神/渡劫大能陨落，遗留洞府和传承
+   - **天道异变**：三百年前灵气潮汐，导致境界上限突破
+   - **未解之谜**：若干隐藏线索供玩家/NPC探索发现
+
+7. **基础规则设定**
+   - 境界上限：初始设定为化神期（可通过世界演化突破）
+   - 天劫规则：突破时有概率触发天劫
+   - 死亡惩罚：身死道消，部分修为/物品掉落
+   - 因果系统：善恶行为积累业力/功德
 
 ### LLM集成设计
 
+**DeepSeek API 集成：**
+- **模型选择**：
+  - `deepseek-chat`（v3）：日常决策、对话生成（低延迟、高性价比）
+  - `deepseek-reasoner`（R1）：复杂战略决策、功法自创验证（深度推理）
+- **API兼容**：OpenAI兼容格式，可直接使用OpenAI SDK
+- **成本控制**：NPC决策使用v3，关键剧情/复杂决策使用R1
+- **速率限制**：DeepSeek限制600 RPM，需实现令牌桶限流
+
 ```
 LLMProvider {
-    provider: ThirdPartyAPI  // OpenAI/Claude/智谱等
-    rate_limiter: TokenBucket
+    provider: DeepSeekAPI
+    models:
+        daily: "deepseek-chat"        // 日常行为、对话
+        reasoning: "deepseek-reasoner" // 复杂决策
+    rate_limiter: TokenBucket(600/min)
     circuit_breaker: CircuitBreaker
     fallback: BehaviorTree
 }
 
-call_llm(context) -> Decision:
+call_llm(context, priority) -> Decision:
+    model = priority == HIGH ? reasoning : daily
     try:
-        response = provider.generate(context, timeout=10s)
+        response = provider.generate(
+            model=model,
+            context=context,
+            timeout=10s,
+            max_tokens=500
+        )
         return parse_decision(response)
     catch TimeoutError:
         metrics.record_fallback()
@@ -205,12 +281,43 @@ Entity {
 graph LR
     A["状态感知"] --> B["行为树评估"]
     B --> C{"需要LLM?"}
-    C -->|是| D["LLM决策"]
-    C -->|否| E["行为树输出"]
-    D --> F["操作执行"]
-    E --> F
-    F --> G["结果反馈"]
-    G --> A
+    C -->|日常决策| D["DeepSeek v3"]
+    C -->|复杂战略| E["DeepSeek R1"]
+    C -->|否| F["行为树输出"]
+    D --> G["操作执行"]
+    E --> G
+    F --> G
+    G --> H["结果反馈"]
+    H --> A
+```
+
+**NPC系统提示词模板（DeepSeek）：**
+
+```
+你是一位修仙者，以下是你的角色设定：
+- 姓名：{name}
+- 境界：{realm}
+- 性格：{personality}
+- 背景：{background_story}
+- 当前目标：{current_goal}
+- 所属势力：{sect}
+
+你身处一个完全自主的修仙世界，所有行为由你自主决定。
+你可以修炼、探索、战斗、交易、结盟、背叛、自创功法等。
+请根据当前情境做出符合角色设定的决策。
+
+当前情境：
+{context}
+
+请从以下操作中选择一项：
+{available_actions}
+
+输出格式：
+{
+  "action": "操作类型",
+  "params": {...},
+  "reasoning": "决策理由（100字以内）"
+}
 ```
 
 **决策周期：**
@@ -321,9 +428,12 @@ CREATE TABLE world_regions (
     name VARCHAR(100) NOT NULL,
     parent_region_id UUID REFERENCES world_regions(id),
     spiritual_density REAL DEFAULT 0,  -- 灵气浓度
+    spiritual_tier INTEGER DEFAULT 1,  -- 灵气品阶（1-9）
     danger_level INTEGER DEFAULT 0,    -- 危险等级
     resources JSONB,                    -- 资源分布
-    rules JSONB                         -- 区域规则（禁区等）
+    rules JSONB,                        -- 区域规则（禁区等）
+    description TEXT,                   -- 区域描述
+    lore TEXT                           -- 区域传说/历史
 );
 
 -- 宗门表
@@ -335,6 +445,7 @@ CREATE TABLE sects (
     entry_requirements JSONB,           -- 入门条件
     territory JSONB,                    -- 势力范围
     rules JSONB,                        -- 宗门规则
+    alignment VARCHAR(20),              -- 正道/魔道/中立
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -359,6 +470,29 @@ CREATE TABLE transactions (
     currency VARCHAR(20) DEFAULT 'spirit_stone',
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- 世界历史/传说表
+CREATE TABLE world_lore (
+    id UUID PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    category VARCHAR(30),               -- 大战/传说/遗迹/未解之谜
+    content TEXT,                       -- 详细内容
+    related_regions JSONB,              -- 关联区域
+    related_entities JSONB,             -- 关联实体
+    hints JSONB,                        -- 探索线索
+    is_discovered BOOLEAN DEFAULT FALSE -- 是否已被发现
+);
+
+-- NPC关系网络表
+CREATE TABLE npc_relationships (
+    id UUID PRIMARY KEY,
+    entity_a_id UUID REFERENCES entities(id),
+    entity_b_id UUID REFERENCES entities(id),
+    relationship_type VARCHAR(30),      -- 师徒/仇敌/盟友/恋人等
+    strength REAL,                      -- 关系强度
+    history TEXT,                       -- 关系历史
+    created_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
 ### 3. NPC AI 数据模型
@@ -373,8 +507,11 @@ CREATE TABLE npc_personalities (
     risk_tolerance REAL,               -- 风险承受度
     social_preference VARCHAR(20),     -- 社交偏好
     background_story TEXT,             -- 背景故事
-    llm_system_prompt TEXT,            -- LLM系统提示词
-    behavior_tree_config JSONB         -- 行为树配置
+    current_goal TEXT,                 -- 当前目标
+    hidden_secrets JSONB,              -- 隐藏秘密
+    llm_system_prompt TEXT,            -- DeepSeek系统提示词
+    behavior_tree_config JSONB,        -- 行为树配置
+    initial_actions JSONB              -- 初始行为模式
 );
 
 -- NPC决策日志
@@ -384,8 +521,10 @@ CREATE TABLE npc_decision_log (
     decision_type VARCHAR(30),
     context JSONB,                     -- 决策上下文
     action_taken JSONB,                -- 采取的行动
-    reasoning TEXT,                    -- 决策推理（LLM输出）
+    reasoning TEXT,                    -- 决策推理（DeepSeek输出）
+    model_used VARCHAR(20),            -- deepseek-chat / deepseek-reasoner
     source VARCHAR(10),                -- 'behavior_tree' | 'llm'
+    token_cost REAL,                   -- API调用成本
     timestamp TIMESTAMP DEFAULT NOW()
 );
 ```
@@ -490,3 +629,5 @@ LLM_Fallback_Chain:
 [^2]: (Go Goroutines) - [Go Concurrency Patterns](https://go.dev/blog/pipelines)
 [^3]: (Behavior Trees) - [AI Game Programming](https://www.gamasutra.com/view/feature/130592/behavior_trees_for_ai_games.php)
 [^4]: (WebSocket) - [RFC 6455](https://datatracker.ietf.org/doc/html/rfc6455)
+[^5]: (DeepSeek API) - [DeepSeek开放平台](https://platform.deepseek.com/)
+[^6]: (DeepSeek Pricing) - API定价：v3输入1元/百万tokens，R1输入4元/百万tokens
