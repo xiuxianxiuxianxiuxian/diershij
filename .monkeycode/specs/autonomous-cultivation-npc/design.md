@@ -413,6 +413,21 @@ Attributes {
     physique_awakened: bool      // 体质是否觉醒
     destiny: int                 // 命格（隐藏属性）
     world_favor: int             // 世界眷顾度
+
+    // ===== 法则属性 (Laws) =====
+    laws: map<string, float>     // 法则感悟进度 (金木水火土风雷冰光暗时空生死等 0-100)
+    law_resonance: int           // 法则共鸣度 (多法则融合度，影响复合法术威力)
+    domain_power: float          // 领域强度 (化神后可展开法则领域)
+    domain_range: float          // 领域范围 (米)
+    law_suppression: float       // 法则压制力 (高阶法则对低阶的压制)
+    
+    // ===== 大道属性 (Dao) =====
+    dao_seed_type: string        // 道种类型 (剑/丹/阵/兽/杀戮/毁灭/造化等)
+    dao_seed_level: int          // 道种等级 (1-9 品)
+    dao_seed_growth: float       // 道种成长度 (0-100%)
+    dao_marks: int               // 道痕数量 (每 100 感悟凝聚 1 道，影响神通威力)
+    dao_heart_comprehension: int // 大道感悟深度 (决定最终境界上限)
+    destiny_path: string         // 命运轨迹 (命格具象化，如"逆天改命"、"顺天应人")
 }
 ```
 
@@ -432,7 +447,80 @@ Attributes {
 | 财富资产 | 4项 | 经济实力 |
 | 特殊属性 | 6项 | 血脉、体质、命格 |
 
-**总计：71项核心属性**
+**总计：83 项核心属性**
+
+### 2.2 功法详细属性系统（60+ 项）
+
+功法不仅是修炼工具，更是 NPC/玩家实力构建的核心。每个功法包含以下属性：
+
+```
+CultivationMethod {
+    // ===== 基础信息 =====
+    id: UUID
+    name: string               // 功法名称
+    creator_id: UUID           // 创始人 ID
+    origin_sect: string        // 起源宗门
+    rank: string               // 品阶（天/地/玄/黄 x 上/中/下/极品，共 12 级）
+    category: string           // 类别（主修功法/秘术/身法/神识/辅助/生活）
+    element_affinity: string   // 属性倾向（金木水火土风雷冰光暗/无）
+    description: text
+    version: int
+    
+    // ===== 核心修炼加成 =====
+    cultivation_speed_mult: float  // 修炼速度倍率（e.g. 1.5x）
+    spiritual_power_cap_mult: float // 灵力上限倍率
+    qi_cap_mult: float             // 气血上限倍率
+    divine_sense_cap_mult: float   // 神识上限倍率
+    lifespan_bonus: int            // 额外寿命加成（年）
+    recovery_speed_mult: float     // 恢复速度倍率（气血/灵力回复）
+    
+    // ===== 战斗属性加成 =====
+    attack_bonuses: map<string, float>   // 攻击加成 {"fire_damage": 1.2, "penetration": 0.5}
+    defense_bonuses: map<string, float>  // 防御加成 {"magic_resist": 0.3, "damage_reduction": 0.1}
+    utility_bonuses: map<string, float>  // 辅助加成 {"loot_rate": 0.1, "alchemy_success": 0.2}
+    
+    // ===== 特殊效果 =====
+    passive_effects: list<string>      // 被动特效列表（如 "mana_shield", "life_steal", "reflect"）
+    active_skills: list<Skill>         // 主动技能列表（功法自带招式）
+    ultimate_skill: Skill              // 功法大成领悟的终极神通
+    
+    // ===== 法则与大道亲和 =====
+    law_affinities: list<string>       // 亲和法则（修炼此功法加速对应法则感悟）
+    law_comprehension_bonus: float     // 法则感悟倍率
+    dao_compatibility: list<string>    // 亲和大道（如修"剑道"功法对剑修有益）
+    
+    // ===== 限制条件 =====
+    required_roots: list<string>       // 必需灵根（如 ["fire", "metal"]）
+    required_physique: list<string>    // 必需体质（如 ["pure_yang_body"]）
+    realm_requirement: string          // 最低境界要求
+    alignment_restriction: string      // 阵营限制（正/魔/中立/无）
+    karma_threshold: int               // 业力阈值限制（超过此值无法修炼）
+    gender_restriction: string         // 性别限制（男/女/无）
+    
+    // ===== 传承与演化 =====
+    parent_method_id: UUID             // 衍生自哪个功法
+    evolution_path: list<UUID>         // 可演化方向（后续升级版）
+    transmission_mode: string          // 传承方式（玉简/口授/血脉/神念）
+    can_modify: bool                   // 是否允许后人修改（True 为开源功法）
+    complexity: int                    // 功法复杂度（影响学习难度和反噬风险）
+}
+```
+
+**功法属性分类说明：**
+
+| 类别 | 属性数量 | 主要影响 |
+|------|----------|----------|
+| 基础信息 | 9 项 | 品阶、来源、属性定位 |
+| 修炼加成 | 6 项 | 核心修炼效率、寿命 |
+| 战斗加成 | 12+ 项 | 攻防数值、特殊战斗能力 |
+| 法则亲和 | 3 项 | 法则感悟速度、领域威力 |
+| 限制条件 | 6 项 | 灵根、体质、阵营门槛 |
+| 传承演化 | 6 项 | 功法来源、修改权限、演化分支 |
+
+**功法总评属性：**
+- `power_score`: int // 功法强度综合评分（由系统根据属性计算）
+- `potential`: int   // 功法潜力值（影响后期演化上限）
+- `popularity`: int  // 流行度（多少人学习）
 
 ### 3. NPC AI 决策管道
 
@@ -1694,6 +1782,27 @@ CREATE TABLE entity_special_attributes (
     world_favor INT DEFAULT 0
 );
 
+-- 法则感悟表
+CREATE TABLE entity_law_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    laws JSONB DEFAULT '{}',  -- {"metal": 20.5, "wood": 10.0}
+    law_resonance INT DEFAULT 0,
+    domain_power REAL DEFAULT 0,
+    domain_range REAL DEFAULT 0,
+    law_suppression REAL DEFAULT 0
+);
+
+-- 大道属性表
+CREATE TABLE entity_dao_attributes (
+    entity_id UUID PRIMARY KEY REFERENCES entities(id),
+    dao_seed_type VARCHAR(30) DEFAULT '无',
+    dao_seed_level INT DEFAULT 0,
+    dao_seed_growth REAL DEFAULT 0,
+    dao_marks INT DEFAULT 0,
+    dao_heart_comprehension INT DEFAULT 0,
+    destiny_path VARCHAR(50) DEFAULT '凡途'
+);
+
 -- 灵石资产表（独立存储各级灵石）
 CREATE TABLE entity_spirit_stones (
     entity_id UUID PRIMARY KEY REFERENCES entities(id),
@@ -1708,12 +1817,49 @@ CREATE TABLE cultivation_methods (
     id UUID PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     creator_id UUID REFERENCES entities(id),
-    realm_requirement VARCHAR(30),
-    attributes JSONB,               -- 功法效果
+    origin_sect VARCHAR(100),
+    rank VARCHAR(20),              -- 天地玄黄 x 上中下极品
+    category VARCHAR(20),          -- 主修/秘术/身法/神识/辅助
+    element_affinity VARCHAR(20),
     description TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     version INTEGER DEFAULT 1,
-    parent_method_id UUID REFERENCES cultivation_methods(id)
+    
+    -- 修炼加成
+    cultivation_speed_mult REAL DEFAULT 1.0,
+    spiritual_power_cap_mult REAL DEFAULT 1.0,
+    qi_cap_mult REAL DEFAULT 1.0,
+    divine_sense_cap_mult REAL DEFAULT 1.0,
+    lifespan_bonus INT DEFAULT 0,
+    recovery_speed_mult REAL DEFAULT 1.0,
+    
+    -- 战斗加成
+    attack_bonuses JSONB DEFAULT '{}',
+    defense_bonuses JSONB DEFAULT '{}',
+    utility_bonuses JSONB DEFAULT '{}',
+    passive_effects TEXT[],
+    active_skills JSONB DEFAULT '[]',
+    ultimate_skill JSONB,
+    
+    -- 法则亲和
+    law_affinities TEXT[],
+    law_comprehension_bonus REAL DEFAULT 1.0,
+    dao_compatibility TEXT[],
+    
+    -- 限制条件
+    required_roots TEXT[],
+    required_physique TEXT[],
+    realm_requirement VARCHAR(30),
+    alignment_restriction VARCHAR(20),
+    karma_threshold INT DEFAULT 0,
+    gender_restriction VARCHAR(10) DEFAULT '无',
+    
+    -- 传承演化
+    parent_method_id UUID REFERENCES cultivation_methods(id),
+    evolution_path UUID[],
+    transmission_mode VARCHAR(20) DEFAULT '玉简',
+    can_modify BOOLEAN DEFAULT FALSE,
+    complexity INT DEFAULT 1
 );
 
 -- 功法-实体关联
