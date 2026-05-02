@@ -71,11 +71,12 @@
 
 #### Acceptance Criteria
 
-1. WHEN 角色尝试自创功法, THE 系统 SHALL 验证角色悟性、境界是否满足自创条件
-2. WHEN 功法创建完成, THE 系统 SHALL 生成功法实体并记录创始人信息
-3. WHILE 功法传承中, THE 系统 SHALL 追踪功法版本演化树
-4. WHEN 其他角色学习功法, THE 系统 SHALL 根据创始人设定决定是否需要传承许可
-5. IF 功法存在逻辑矛盾, THE 系统 SHALL 拒绝创建并提示修改
+1. WHEN 角色尝试自创功法, THE 系统 SHALL 验证角色是否拥有至少10000极品灵石
+2. WHEN 验证通过, THE 系统 SHALL 扣除10000极品灵石并调用DeepSeek R1进行功法验证和生成
+3. WHEN 功法创建完成, THE 系统 SHALL 生成功法实体并记录创始人信息
+4. WHILE 功法传承中, THE 系统 SHALL 追踪功法版本演化树
+5. WHEN 其他角色学习功法, THE 系统 SHALL 根据创始人设定决定是否需要传承许可
+6. IF 功法存在逻辑矛盾, THE 系统 SHALL 拒绝创建并退还极品灵石
 
 ### Requirement 5: NPC自主决策系统（混合AI）
 

@@ -325,6 +325,39 @@ graph LR
 - 低频LLM决策：每 30-120 秒评估一次（复杂社交、战略决策）
 - LLM超时降级：超过 10 秒未响应则使用行为树默认策略
 
+### 3.5 功法自创系统（含成本约束）
+
+**成本约束设计：**
+- 自创功法需要消耗 **10000极品灵石**，用于覆盖DeepSeek R1推理成本
+- 防止NPC频繁调用LLM自创功法导致API费用失控
+- 只有达到一定财富积累的实体才能尝试自创
+
+```
+CreateMethod {
+    validate(entity) -> ValidationResult:
+        if entity.premium_spirit_stones < 10000:
+            return Error("自创功法需要10000极品灵石")
+        if entity.realm < required_realm:
+            return Error("境界不足，无法自创功法")
+        if entity.comprehension < required_comprehension:
+            return Error("悟性不足，无法自创功法")
+        return Success
+    
+    execute(entity, method_data) -> MethodEntity:
+        deduct(entity.premium_spirit_stones, 10000)
+        method = deepseek_reasoner.validate_and_generate(method_data)
+        method.creator_id = entity.id
+        method.save()
+        return method
+}
+```
+
+**功法验证流程（DeepSeek R1）：**
+1. 检查功法逻辑自洽性（属性加成是否合理）
+2. 验证境界要求与效果匹配度
+3. 生成功法描述、修炼路径、瓶颈设定
+4. 返回结构化功法数据存入数据库
+
 ### 4. 世界状态引擎
 
 ```
@@ -394,7 +427,9 @@ CREATE TABLE entity_attributes (
     comprehension REAL DEFAULT 0,   -- 悟性
     constitution REAL DEFAULT 0,    -- 根骨
     luck REAL DEFAULT 0,            -- 气运
-    cultivation_progress REAL DEFAULT 0  -- 修炼进度
+    cultivation_progress REAL DEFAULT 0,  -- 修炼进度
+    spirit_stones REAL DEFAULT 0,   -- 灵石（普通）
+    premium_spirit_stones REAL DEFAULT 0  -- 极品灵石
 );
 
 -- 功法表
