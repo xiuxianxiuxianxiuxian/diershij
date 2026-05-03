@@ -56,14 +56,20 @@ func (s *Sidebar) SelectedID() string {
 }
 
 func (s *Sidebar) Layout(gtx layout.Context, selectedID string, onSelect func(string)) layout.Dimensions {
-	return layout.Stack{}.Layout(gtx,
-		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			return drawRect(gtx, theme.DefaultTheme.Background, gtx.Constraints.Max)
-		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{
-				Axis: layout.Vertical,
-			}.Layout(gtx, s.layoutItems(gtx, selectedID, onSelect)...)
+	return layout.Flex{
+		Axis: layout.Vertical,
+	}.Layout(gtx,
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Stack{}.Layout(gtx,
+				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+					return drawRect(gtx, theme.DefaultTheme.Background, gtx.Constraints.Max)
+				}),
+				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{
+						Axis: layout.Vertical,
+					}.Layout(gtx, s.layoutItems(gtx, selectedID, onSelect)...)
+				}),
+			)
 		}),
 	)
 }
@@ -76,6 +82,10 @@ func (s *Sidebar) layoutItems(gtx layout.Context, selectedID string, onSelect fu
 		item := &s.Items[i]
 
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			minHeight := gtx.Dp(unit.Dp(48))
+			if gtx.Constraints.Min.Y < minHeight {
+				gtx.Constraints.Min.Y = minHeight
+			}
 			return s.layoutMenuItem(gtx, index, item, selectedID, onSelect)
 		}))
 	}
@@ -95,6 +105,11 @@ func (s *Sidebar) layoutMenuItem(gtx layout.Context, index int, item *SidebarIte
 			if onSelect != nil {
 				onSelect(item.ID)
 			}
+		}
+
+		minHeight := gtx.Dp(unit.Dp(48))
+		if gtx.Constraints.Min.Y < minHeight {
+			gtx.Constraints.Min.Y = minHeight
 		}
 
 		return layout.Stack{}.Layout(gtx,
