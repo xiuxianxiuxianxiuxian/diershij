@@ -29,30 +29,36 @@ const (
 
 type SocialTab struct {
 	// 频道切换
-	worldChannelBtn  widget.Clickable
+	worldChannelBtn   widget.Clickable
 	privateChannelBtn widget.Clickable
-	currentChannel   ChatChannel
+	currentChannel    ChatChannel
 
 	// 好友列表
-	friendList      widget.List
-	selectedFriend  string
-	friendItems     map[string]*friendItem
+	friendList     widget.List
+	selectedFriend string
+	friendItems    map[string]*friendItem
 
 	// 消息列表
-	messageList     widget.List
+	messageList widget.List
 
 	// 聊天输入
-	messageInput    widget.Editor
-	sendBtn         widget.Clickable
+	messageInput widget.Editor
+	sendBtn      widget.Clickable
 
 	// 好友操作按钮
 	addFriendBtn    widget.Clickable
 	deleteFriendBtn widget.Clickable
 
+	// 添加好友对话框
+	showAddFriendDialog bool
+	addFriendInput      widget.Editor
+	addFriendConfirmBtn widget.Clickable
+	addFriendCancelBtn  widget.Clickable
+
 	// 反馈消息
-	feedbackMsg     string
-	feedbackTime    time.Time
-	feedbackColor   color.RGBA
+	feedbackMsg   string
+	feedbackTime  time.Time
+	feedbackColor color.RGBA
 }
 
 type friendItem struct {
@@ -94,7 +100,7 @@ func (t *SocialTab) Layout(gtx layout.Context) layout.Dimensions {
 		t.feedbackMsg = ""
 	}
 
-	return layout.Flex{
+	content := layout.Flex{
 		Axis: layout.Vertical,
 	}.Layout(gtx,
 		// 标题
@@ -137,6 +143,104 @@ func (t *SocialTab) Layout(gtx layout.Context) layout.Dimensions {
 				lbl.Color = t.feedbackColor
 				lbl.Size = 14
 				return lbl.Layout(gtx)
+			})
+		}),
+	)
+
+	// 添加好友对话框
+	if t.showAddFriendDialog {
+		return t.layoutAddFriendDialog(gtx, content)
+	}
+
+	return content
+}
+
+// 添加好友对话框布局
+func (t *SocialTab) layoutAddFriendDialog(gtx layout.Context, content layout.Dimensions) layout.Dimensions {
+	return layout.Stack{}.Layout(gtx,
+		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+			return content
+		}),
+		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+			// 半透明背景
+			return drawRect(gtx, color.RGBA{R: 0, G: 0, B: 0, A: 128}, gtx.Constraints.Max)
+		}),
+		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+			// 对话框
+			dialogWidth := int(float32(gtx.Constraints.Max.X) * 0.6)
+			if dialogWidth > 400 {
+				dialogWidth = 400
+			}
+			dialogHeight := 200
+
+			offsetX := (gtx.Constraints.Max.X - dialogWidth) / 2
+			offsetY := (gtx.Constraints.Max.Y - dialogHeight) / 2
+
+			return layout.Inset{
+				Top:    unit.Dp(offsetY),
+				Bottom: unit.Dp(offsetY),
+				Left:   unit.Dp(offsetX),
+			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Max.X = dialogWidth
+				gtx.Constraints.Max.Y = dialogHeight
+
+				return layout.Stack{}.Layout(gtx,
+					layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+						return drawRectWithRadius(gtx, theme.DefaultTheme.Surface, gtx.Constraints.Max, 12)
+					}),
+					layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+						return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{
+								Axis: layout.Vertical,
+							}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									title := components.NewLabel("添加好友")
+									title.Color = theme.DefaultTheme.Primary
+									title.Size = 18
+									return title.Layout(gtx)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										border := widget.Border{
+											Color:        toNRGBA(theme.DefaultTheme.Border),
+											CornerRadius: unit.Dp(4),
+											Width:        unit.Dp(1),
+										}
+										return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												editor := material.Editor(th, &t.addFriendInput, "输入好友名称")
+												editor.Color = toNRGBA(theme.DefaultTheme.Text)
+												return editor.Layout(gtx)
+											})
+										})
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return layout.Flex{
+											Axis:      layout.Horizontal,
+											Alignment: layout.Middle,
+											Spacing:   layout.SpaceEvenly,
+										}.Layout(gtx,
+											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+												btn := material.Button(th, &t.addFriendCancelBtn, "取消")
+												btn.Background = toNRGBA(theme.DefaultTheme.Border)
+												return btn.Layout(gtx)
+											}),
+											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+												return layout.Inset{Left: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+													btn := material.Button(th, &t.addFriendConfirmBtn, "添加")
+													btn.Background = toNRGBA(theme.DefaultTheme.Primary)
+													return btn.Layout(gtx)
+												})
+											}),
+										)
+									})
+								}),
+							)
+						})
+					}),
+				)
 			})
 		}),
 	)
@@ -628,9 +732,33 @@ func (t *SocialTab) handleEvents(gtx layout.Context) {
 		t.sendMessage()
 	}
 
-	// 添加好友
+	// 添加好友按钮
 	if t.addFriendBtn.Clicked(gtx) {
-		t.showFeedback("添加好友功能待实现", theme.DefaultTheme.Warning)
+		t.showAddFriendDialog = true
+		t.addFriendInput.SetText("")
+	}
+
+	// 对话框取消按钮
+	if t.addFriendCancelBtn.Clicked(gtx) {
+		t.showAddFriendDialog = false
+		t.addFriendInput.SetText("")
+	}
+
+	// 对话框确认按钮
+	if t.addFriendConfirmBtn.Clicked(gtx) {
+		friendName := t.addFriendInput.Text()
+		if friendName != "" {
+			ws := network.GetWebSocketClient()
+			if err := ws.SendOperation("add_friend", map[string]interface{}{
+				"name": friendName,
+			}); err != nil {
+				t.showFeedback("添加好友失败: "+err.Error(), theme.DefaultTheme.Error)
+			} else {
+				t.showFeedback("已发送好友请求: "+friendName, theme.DefaultTheme.Success)
+			}
+		}
+		t.showAddFriendDialog = false
+		t.addFriendInput.SetText("")
 	}
 
 	// 删除好友

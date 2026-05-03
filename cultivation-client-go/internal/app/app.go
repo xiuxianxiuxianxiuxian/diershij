@@ -91,6 +91,22 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		}
 	})
 
+	// 实体更新通知
+	ws.RegisterHandler("entity_update", func(payload []byte) {
+		var entity types.Entity
+		if err := json.Unmarshal(payload, &entity); err != nil {
+			return
+		}
+
+		// 更新角色信息
+		char := store.GetGameStore().GetCharacter()
+		if char != nil && char.Name == entity.Name {
+			// 更新境界信息
+			char.CultivationRealm = entity.Realm
+			store.GetGameStore().SetCharacter(char)
+		}
+	})
+
 	// 新消息通知
 	ws.RegisterHandler("new_message", func(payload []byte) {
 		var msg types.Message
@@ -122,8 +138,8 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		store.GetGameStore().SetCombat(&update)
 
 		// 战斗开始/结束通知
-		if update.InCombat {
-			a.mainPage.GetNotificationManager().AddWarning("战斗开始！")
+		if update.InCombat && update.CurrentEnemy != nil {
+			a.mainPage.GetNotificationManager().AddWarning("遭遇 " + update.CurrentEnemy.Name + "，战斗开始！")
 		}
 	})
 
@@ -134,6 +150,39 @@ func (a *CultivationApp) registerNotificationHandlers() {
 			return
 		}
 		a.mainPage.GetNotificationManager().AddInfo("世界事件: " + event.Description)
+	})
+
+	// 公告通知
+	ws.RegisterHandler("announcement", func(payload []byte) {
+		var announcement types.Announcement
+		if err := json.Unmarshal(payload, &announcement); err != nil {
+			return
+		}
+		if announcement.Priority >= 2 {
+			a.mainPage.GetNotificationManager().AddWarning("公告: " + announcement.Content)
+		} else {
+			a.mainPage.GetNotificationManager().AddInfo("公告: " + announcement.Content)
+		}
+	})
+
+	// 好友请求通知
+	ws.RegisterHandler("friend_request", func(payload []byte) {
+		var request types.FriendRequest
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return
+		}
+		a.mainPage.GetNotificationManager().AddInfo(request.FromName + " 向你发送了好友请求")
+	})
+
+	// 系统消息通知
+	ws.RegisterHandler("system_message", func(payload []byte) {
+		var data map[string]interface{}
+		if err := json.Unmarshal(payload, &data); err != nil {
+			return
+		}
+		if msg, ok := data["message"].(string); ok {
+			a.mainPage.GetNotificationManager().AddInfo(msg)
+		}
 	})
 }
 

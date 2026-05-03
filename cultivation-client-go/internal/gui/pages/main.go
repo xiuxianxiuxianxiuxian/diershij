@@ -25,7 +25,7 @@ func NewMainPage() *MainPage {
 		sidebar:             components.NewSidebar(),
 		statusBar:           components.NewStatusBar(),
 		notificationManager: components.NewNotificationManager(),
-		tabs: make(map[string]Tab),
+		tabs:                make(map[string]Tab),
 		currentTabID:        "character",
 	}
 

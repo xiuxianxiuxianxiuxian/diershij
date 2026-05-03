@@ -4,10 +4,10 @@ import "time"
 
 // 实体（用户/角色）
 type Entity struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Realm       string `json:"realm"`
-	EntityType  string `json:"entity_type"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Realm      string `json:"realm"`
+	EntityType string `json:"entity_type"`
 }
 
 // 登录请求
@@ -40,13 +40,13 @@ type RegisterResponse struct {
 
 // 用户
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email,omitempty"`
-	Level     int       `json:"level"`
-	Exp       int       `json:"exp"`
-	CultivationLevel string `json:"cultivation_level,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
+	ID               string    `json:"id"`
+	Username         string    `json:"username"`
+	Email            string    `json:"email,omitempty"`
+	Level            int       `json:"level"`
+	Exp              int       `json:"exp"`
+	CultivationLevel string    `json:"cultivation_level,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
 }
 
 // 角色
@@ -66,10 +66,10 @@ type Character struct {
 
 // 世界状态
 type WorldState struct {
-	CurrentMap     string            `json:"current_map"`
-	PlayersOnline  int               `json:"players_online"`
-	Events         []WorldEvent      `json:"events,omitempty"`
-	Announcements  []Announcement    `json:"announcements,omitempty"`
+	CurrentMap    string         `json:"current_map"`
+	PlayersOnline int            `json:"players_online"`
+	Events        []WorldEvent   `json:"events,omitempty"`
+	Announcements []Announcement `json:"announcements,omitempty"`
 }
 
 // 世界事件
@@ -83,17 +83,17 @@ type WorldEvent struct {
 
 // 公告
 type Announcement struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	Priority int   `json:"priority"`
+	ID       string `json:"id"`
+	Content  string `json:"content"`
+	Priority int    `json:"priority"`
 }
 
 // 战斗状态
 type CombatState struct {
-	InCombat      bool         `json:"in_combat"`
-	CurrentEnemy  *Enemy       `json:"current_enemy,omitempty"`
-	BattleLog     []CombatLog  `json:"battle_log,omitempty"`
-	TurnNumber    int          `json:"turn_number"`
+	InCombat     bool        `json:"in_combat"`
+	CurrentEnemy *Enemy      `json:"current_enemy,omitempty"`
+	BattleLog    []CombatLog `json:"battle_log,omitempty"`
+	TurnNumber   int         `json:"turn_number"`
 }
 
 // 敌人
@@ -126,10 +126,10 @@ type Skill struct {
 
 // 社交信息
 type SocialInfo struct {
-	Friends     []Friend         `json:"friends,omitempty"`
-	Guild       *Guild           `json:"guild,omitempty"`
-	Messages    []Message        `json:"messages,omitempty"`
-	Requests    []FriendRequest  `json:"friend_requests,omitempty"`
+	Friends  []Friend        `json:"friends,omitempty"`
+	Guild    *Guild          `json:"guild,omitempty"`
+	Messages []Message       `json:"messages,omitempty"`
+	Requests []FriendRequest `json:"friend_requests,omitempty"`
 }
 
 // 好友
@@ -211,8 +211,8 @@ type WSMessage struct {
 
 // OperationResult 操作结果
 type OperationResult struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
-	ErrorCode int    `json:"error_code,omitempty"`
+	Success   bool                   `json:"success"`
+	Message   string                 `json:"message"`
+	ErrorCode int                    `json:"error_code,omitempty"`
 	Data      map[string]interface{} `json:"data,omitempty"`
 }

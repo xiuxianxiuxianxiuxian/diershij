@@ -10,14 +10,14 @@ import (
 )
 
 type LoginPage struct {
-	username   *components.InputField
-	password   *components.InputField
-	submitBtn  *components.Button
+	username    *components.InputField
+	password    *components.InputField
+	submitBtn   *components.Button
 	registerBtn *components.Button
-	errorMsg   string
-	loading    bool
-	onLogin    func()
-	onRegister func()
+	errorMsg    string
+	loading     bool
+	onLogin     func()
+	onRegister  func()
 }
 
 func NewLoginPage() *LoginPage {
