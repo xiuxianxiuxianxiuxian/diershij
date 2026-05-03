@@ -53,3 +53,14 @@ type ErrorPayload struct {
     Code    int    `json:"code"`
     Message string `json:"message"`
 }
+
+// DBMessage represents a message stored in the database (chat messages)
+type DBMessage struct {
+    ID         string    `json:"id"`
+    SenderID   string    `json:"sender_id"`
+    ReceiverID string    `json:"receiver_id"`
+    Type       string    `json:"type"`
+    Content    string    `json:"content"`
+    IsRead     bool      `json:"is_read"`
+    CreatedAt  int64     `json:"created_at"`
+}

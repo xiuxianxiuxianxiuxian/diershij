@@ -17,6 +17,6 @@ WORKDIR /root/
 
 COPY --from=builder /app/heavenly-dao .
 
-EXPOSE 50052
+EXPOSE 50053
 
 CMD ["./heavenly-dao"]

@@ -1,0 +1,63 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "postgres",
+    "password": "123456",
+    "database": "cultivation",
+    "max_connections": 20,
+    "conn_timeout": 30000000000
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "db": 0
+  },
+  "server": {
+    "name": "cultivation-server",
+    "host": "0.0.0.0",
+    "port": 8080,
+    "read_timeout": 30000000000,
+    "write_timeout": 30000000000
+  },
+  "grpc": {
+    "host": "0.0.0.0",
+    "port": 50051
+  },
+  "llm": {
+    "provider": "deepseek",
+    "api_key": "",
+    "daily_model": "deepseek-chat",
+    "reason_model": "deepseek-reasoner",
+    "rate_limit": 600,
+    "timeout": 10
+  },
+  "heavenly_dao": {
+    "karma_decay_rate": 0.001,
+    "tribulation_base": {
+      "qi_refining": 1.0,
+      "foundation_building": 1.5,
+      "golden_core": 2.0,
+      "nascent_soul": 3.0,
+      "spirit_severance": 4.0,
+      "void_returning": 5.0,
+      "great_ascension": 6.0
+    },
+    "realm_lifespan": {
+      "qi_refining": 120,
+      "foundation_building": 200,
+      "golden_core": 400,
+      "nascent_soul": 800,
+      "spirit_severance": 1500,
+      "void_returning": 3000,
+      "great_ascension": 10000
+    },
+    "karma_thresholds": {
+      "benevolent": 1000,
+      "righteous": 100,
+      "neutral": -100,
+      "evil": -1000
+    }
+  }
+}

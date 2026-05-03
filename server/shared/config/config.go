@@ -2,6 +2,7 @@ package config
 
 import (
     "encoding/json"
+    "fmt"
     "os"
     "time"
 )
@@ -92,7 +93,7 @@ func LoadConfigFromEnv() *Config {
         },
         Server: ServerConfig{
             Host: getEnv("SERVER_HOST", "0.0.0.0"),
-            Port: getEnvInt("SERVER_PORT", 8080),
+            Port: getEnvInt("SERVER_PORT", 8081),
         },
         GRPC: GRPCConfig{
             Host: getEnv("GRPC_HOST", "0.0.0.0"),
@@ -119,7 +120,7 @@ func getEnv(key, defaultValue string) string {
 func getEnvInt(key string, defaultValue int) int {
     if value := os.Getenv(key); value != "" {
         var result int
-        if _, err := os.Sscanf(value, "%d", &result); err == nil {
+        if _, err := fmt.Sscanf(value, "%d", &result); err == nil {
             return result
         }
     }

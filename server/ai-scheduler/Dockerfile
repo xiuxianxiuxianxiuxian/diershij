@@ -17,6 +17,6 @@ WORKDIR /root/
 
 COPY --from=builder /app/ai-scheduler .
 
-EXPOSE 50053
+EXPOSE 50052
 
 CMD ["./ai-scheduler"]

@@ -1,6 +1,7 @@
 package main
 
 import (
+    "fmt"
     "log"
     "os"
 
@@ -47,7 +48,7 @@ func getEnv(key, defaultValue string) string {
 func getEnvInt(key string, defaultValue int) int {
     if value := os.Getenv(key); value != "" {
         var result int
-        if _, err := os.Sscanf(value, "%d", &result); err == nil {
+        if _, err := fmt.Sscanf(value, "%d", &result); err == nil {
             return result
         }
     }

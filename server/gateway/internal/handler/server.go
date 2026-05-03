@@ -1,6 +1,7 @@
 package handler
 
 import (
+    "fmt"
     "net/http"
     "time"
 
@@ -31,6 +32,7 @@ func NewServer(cfg *config.Config, wsHub *WebSocketHub, authSvc *service.AuthSer
     gin.SetMode(gin.ReleaseMode)
     engine := gin.New()
     engine.Use(gin.Recovery())
+    engine.Use(corsMiddleware())
 
     s := &Server{
         cfg:        cfg,
@@ -44,6 +46,21 @@ func NewServer(cfg *config.Config, wsHub *WebSocketHub, authSvc *service.AuthSer
     return s
 }
 
+func corsMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+        c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+        if c.Request.Method == "OPTIONS" {
+            c.AbortWithStatus(204)
+            return
+        }
+
+        c.Next()
+    }
+}
+
 func (s *Server) setupRoutes() {
     s.engine.POST("/auth/register", s.handleRegister)
     s.engine.POST("/auth/login", s.handleLogin)
@@ -52,7 +69,8 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start() error {
-    return s.engine.Run(":8080")
+    addr := fmt.Sprintf(":%d", s.cfg.Server.Port)
+    return s.engine.Run(addr)
 }
 
 func (s *Server) handleRegister(c *gin.Context) {
