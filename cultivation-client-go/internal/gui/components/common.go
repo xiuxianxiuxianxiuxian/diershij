@@ -239,12 +239,15 @@ func (p *ProgressBar) SetShowText(show bool) {
 }
 
 func (p *ProgressBar) Layout(gtx layout.Context) layout.Dimensions {
-	progress := float32(p.Value) / float32(p.Max)
-	if progress < 0 {
-		progress = 0
-	}
-	if progress > 1 {
-		progress = 1
+	var progress float32
+	if p.Max > 0 {
+		progress = float32(p.Value) / float32(p.Max)
+		if progress < 0 {
+			progress = 0
+		}
+		if progress > 1 {
+			progress = 1
+		}
 	}
 
 	barHeight := gtx.Dp(p.Height)

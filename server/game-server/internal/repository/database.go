@@ -122,10 +122,12 @@ func (r *EntityRepository) Create(ctx context.Context, entity *types.Entity) err
         return err
     }
 
-    // 初始化灵石和业力
-    if stonesErr := r.spiritStones.Upsert(ctx, entity.ID, &entity.Attributes.SpiritStones); stonesErr != nil {
-        return stonesErr
+    // 初始化基础属性（含灵石）
+    if err := r.UpdateAttributes(ctx, entity.ID, &entity.Attributes); err != nil {
+        return err
     }
+
+    // 初始化业力
     return r.karma.Upsert(ctx, entity.ID, &entity.Karma)
 }
 
