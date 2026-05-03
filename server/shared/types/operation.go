@@ -22,6 +22,12 @@ const (
     ActionMeditate      ActionType = "meditate"
     ActionSleep         ActionType = "sleep"
     ActionMove          ActionType = "move"
+    ActionLeaveSect     ActionType = "leave_sect"
+    ActionAddFriend     ActionType = "add_friend"
+    ActionRemoveFriend  ActionType = "remove_friend"
+    ActionAcceptFriend  ActionType = "accept_friend"
+    ActionFlee          ActionType = "flee"
+    ActionUseSkill      ActionType = "use_skill"
 )
 
 type Operation struct {

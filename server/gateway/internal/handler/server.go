@@ -1,6 +1,7 @@
 package handler
 
 import (
+    "context"
     "fmt"
     "net/http"
     "time"
@@ -141,6 +142,19 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 
     client := NewWebSocketClient(entityID, conn, s.wsHub, s.gameClient)
     s.wsHub.Register(client)
+
+    // 发送初始状态同步
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    entity, err := s.gameClient.GetEntity(ctx, entityID)
+    cancel()
+    if err == nil && entity != nil {
+        client.send <- types.Message{
+            Type: types.MessageTypeStateSync,
+            Payload: map[string]interface{}{
+                "entity": entity,
+            },
+        }
+    }
 
     go client.WritePump()
     go client.ReadPump()

@@ -146,15 +146,9 @@ func (p *RegisterPage) handleRegister() {
 	p.loading = false
 
 	// 连接 WebSocket
-	network.RegisterDefaultHandlers()
 	if err := network.GetWebSocketClient().Connect(); err != nil {
 		// 忽略 WebSocket 错误
 	}
-
-	// 加载数据
-	_, _ = network.GetAPIClient().GetCharacter()
-	_, _ = network.GetAPIClient().GetWorldState()
-	_, _ = network.GetAPIClient().GetSocialInfo()
 
 	// 触发注册成功回调
 	if p.onRegister != nil {

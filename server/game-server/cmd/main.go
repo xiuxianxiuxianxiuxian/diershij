@@ -11,6 +11,7 @@ import (
 	cultivation "github.com/cultivation-world/shared/proto/pb"
 	"github.com/cultivation-world/shared/config"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -25,12 +26,39 @@ func main() {
 	redisClient := repository.NewRedisClient(&cfg.Redis)
 	defer redisClient.Close()
 
-	entityRepo := repository.NewEntityRepository(db, redisClient)
+	entityRepo := repository.NewEntityRepository(db, redisClient,
+		repository.NewSpiritStonesRepository(db),
+		repository.NewKarmaRepository(db),
+	)
 	itemRepo := repository.NewPostgresItemRepository(db)
 	inventoryRepo := repository.NewPostgresInventoryRepository(db)
 	spellRepo := repository.NewPostgresSpellRepository(db)
 	messageRepo := repository.NewPostgresMessageRepository(db)
-	operationSvc := service.NewOperationService(entityRepo, itemRepo, inventoryRepo, spellRepo, messageRepo, nil)
+	sectRepo := repository.NewSectRepository(db)
+	recipeRepo := repository.NewRecipeRepository(db)
+
+	worldConn, err := grpc.Dial(
+		fmt.Sprintf("%s:%d", cfg.WorldEngine.Host, cfg.WorldEngine.Port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect to world engine: %v", err)
+	}
+	defer worldConn.Close()
+	worldClient := service.NewWorldGrpcClient(worldConn)
+
+	daoConn, err := grpc.Dial(
+		fmt.Sprintf("%s:%d", cfg.DaoService.Host, cfg.DaoService.Port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect to heavenly dao: %v", err)
+	}
+	defer daoConn.Close()
+	daoClient := service.NewHeavenlyDaoGrpcClient(daoConn)
+
+	operationSvc := service.NewOperationService(entityRepo, itemRepo, inventoryRepo, spellRepo, messageRepo, worldClient, daoClient,
+		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo))
 	gameSvc := service.NewGameService(entityRepo, operationSvc)
 
 	grpcServer := grpc.NewServer()

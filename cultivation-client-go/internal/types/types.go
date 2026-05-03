@@ -213,6 +213,7 @@ type WSMessage struct {
 type OperationResult struct {
 	Success   bool                   `json:"success"`
 	Message   string                 `json:"message"`
+	Effects   map[string]interface{} `json:"effects,omitempty"`
+	Timestamp int64                  `json:"timestamp,omitempty"`
 	ErrorCode int                    `json:"error_code,omitempty"`
-	Data      map[string]interface{} `json:"data,omitempty"`
 }

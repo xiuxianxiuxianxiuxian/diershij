@@ -17,9 +17,9 @@ import (
 )
 
 type WorldTab struct {
-	exploreBtn     widget.Clickable
-	moveBtn        widget.Clickable
-	gatherBtn      widget.Clickable
+	exploreBtn     *components.Button
+	moveBtn        *components.Button
+	gatherBtn      *components.Button
 	eventList      widget.List
 	feedbackMsg    string
 	feedbackTime   time.Time
@@ -29,6 +29,9 @@ type WorldTab struct {
 
 func NewWorldTab() *WorldTab {
 	return &WorldTab{
+		exploreBtn: btn("🔍 探索", theme.DefaultTheme.Primary),
+		moveBtn:    btn("🚶 移动", theme.DefaultTheme.Secondary),
+		gatherBtn:  btn("⛏️ 采集", theme.DefaultTheme.Success),
 		eventList: widget.List{
 			List: layout.List{
 				Axis: layout.Vertical,
@@ -476,28 +479,21 @@ func (t *WorldTab) layoutActionButtons(gtx layout.Context) layout.Dimensions {
 		}.Layout(gtx,
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return t.layoutButton(gtx, &t.exploreBtn, "🔍 探索", theme.DefaultTheme.Primary)
+					return t.exploreBtn.Layout(gtx)
 				})
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Left: unit.Dp(4), Right: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return t.layoutButton(gtx, &t.moveBtn, "🚶 移动", theme.DefaultTheme.Secondary)
+					return t.moveBtn.Layout(gtx)
 				})
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return t.layoutButton(gtx, &t.gatherBtn, "⛏️ 采集", theme.DefaultTheme.Success)
+					return t.gatherBtn.Layout(gtx)
 				})
 			}),
 		)
 	})
-}
-
-func (t *WorldTab) layoutButton(gtx layout.Context, clickable *widget.Clickable, text string, btnColor color.RGBA) layout.Dimensions {
-	btn := material.Button(th, clickable, text)
-	btn.Background = toNRGBA(btnColor)
-	btn.Inset = layout.UniformInset(unit.Dp(12))
-	return btn.Layout(gtx)
 }
 
 func (t *WorldTab) handleActions(gtx layout.Context) {

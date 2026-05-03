@@ -207,9 +207,15 @@ func (c *WebSocketClient) handleOperation(msg *types.Message) {
         return
     }
 
+    payload := map[string]interface{}{
+        "success":   result.Success,
+        "message":   result.Message,
+        "effects":   result.Effects,
+        "timestamp": result.Timestamp,
+    }
     c.send <- types.Message{
         Type:    types.MessageTypeOpResult,
-        Payload: map[string]interface{}{"result": result},
+        Payload: payload,
     }
 }
 

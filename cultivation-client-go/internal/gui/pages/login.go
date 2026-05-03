@@ -129,15 +129,10 @@ func (p *LoginPage) handleLogin() {
 
 	p.loading = false
 
-	// 连接 WebSocket（通知处理器已在 app.go 中注册）
+	// 注册 WebSocket 消息处理器并连接
 	if err := network.GetWebSocketClient().Connect(); err != nil {
 		// 忽略 WebSocket 错误，继续进入主页面
 	}
-
-	// 加载数据
-	_, _ = network.GetAPIClient().GetCharacter()
-	_, _ = network.GetAPIClient().GetWorldState()
-	_, _ = network.GetAPIClient().GetSocialInfo()
 
 	// 触发登录成功回调
 	if p.onLogin != nil {

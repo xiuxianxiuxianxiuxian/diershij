@@ -138,6 +138,72 @@ func (s *GameStore) GetLastOperationResult() *types.OperationResult {
 	return s.lastOperationResult
 }
 
+// getFloat64 safely extracts a float64 from a map, handling both float64 (JSON) and int types.
+func getFloat64(m map[string]interface{}, key string) (float64, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	default:
+		return 0, false
+	}
+}
+
+// SetCharacterFromServerEntity converts a server-side entity map (from state_sync/entity_update)
+// into the client's Character struct and stores it.
+func (s *GameStore) SetCharacterFromServerEntity(rawEntity map[string]interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.character == nil {
+		s.character = &types.Character{}
+	}
+
+	if id, ok := rawEntity["id"].(string); ok {
+		s.character.ID = id
+	}
+	if name, ok := rawEntity["name"].(string); ok {
+		s.character.Name = name
+	}
+	if realm, ok := rawEntity["realm"].(string); ok {
+		s.character.CultivationRealm = realm
+	}
+
+	// Extract attributes sub-map
+	if attrs, ok := rawEntity["attributes"].(map[string]interface{}); ok {
+		if qi, ok := getFloat64(attrs, "qi"); ok {
+			s.character.Health = int(qi)
+		}
+		if maxQi, ok := getFloat64(attrs, "max_qi"); ok {
+			s.character.MaxHealth = int(maxQi)
+		}
+		if sp, ok := getFloat64(attrs, "spiritual_power"); ok {
+			s.character.Energy = int(sp)
+		}
+		if maxSp, ok := getFloat64(attrs, "max_spiritual_power"); ok {
+			s.character.MaxEnergy = int(maxSp)
+		}
+		if atk, ok := getFloat64(attrs, "attack_power"); ok {
+			s.character.Attack = int(atk)
+		}
+		if def, ok := getFloat64(attrs, "defense"); ok {
+			s.character.Defense = int(def)
+		}
+		if speed, ok := getFloat64(attrs, "speed"); ok {
+			s.character.Speed = int(speed)
+		}
+	}
+}
+
 func (s *GameStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

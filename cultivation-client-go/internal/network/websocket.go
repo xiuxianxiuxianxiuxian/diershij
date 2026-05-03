@@ -17,7 +17,7 @@ type WebSocketClient struct {
 	url       string
 	connected bool
 	reconnect bool
-	handlers  map[string]func([]byte)
+	handlers  map[string][]func([]byte)
 	sendChan  chan []byte
 	done      chan struct{}
 }
@@ -31,7 +31,7 @@ func GetWebSocketClient() *WebSocketClient {
 			url:       "ws://localhost:8081/ws",
 			connected: false,
 			reconnect: true,
-			handlers:  make(map[string]func([]byte)),
+			handlers:  make(map[string][]func([]byte)),
 			sendChan:  make(chan []byte, 100),
 			done:      make(chan struct{}),
 		}
@@ -123,17 +123,19 @@ func (c *WebSocketClient) Send(messageType string, data interface{}) error {
 func (c *WebSocketClient) RegisterHandler(messageType string, handler func([]byte)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.handlers[messageType] = handler
+	c.handlers[messageType] = append(c.handlers[messageType], handler)
 }
 
 func (c *WebSocketClient) handleMessage(msg *types.WSMessage) {
 	c.mu.RLock()
-	handler, ok := c.handlers[string(msg.Type)]
+	handlers := c.handlers[string(msg.Type)]
 	c.mu.RUnlock()
 
-	if ok {
+	if len(handlers) > 0 {
 		payload, _ := json.Marshal(msg.Payload)
-		handler(payload)
+		for _, handler := range handlers {
+			handler(payload)
+		}
 	}
 }
 
@@ -274,9 +276,9 @@ func (c *WebSocketClient) Explore() error {
 // SendMessage 发送消息
 func (c *WebSocketClient) SendMessage(content string, msgType string, receiverID string) error {
 	params := map[string]interface{}{
-		"content":     content,
-		"type":        msgType,
-		"receiver_id": receiverID,
+		"content":       content,
+		"message_type":  msgType,
+		"receiver_id":   receiverID,
 	}
 	return c.SendOperation("send_message", params)
 }
@@ -319,7 +321,7 @@ func (c *WebSocketClient) CreateSect(sectName string) error {
 	params := map[string]interface{}{
 		"sect_name": sectName,
 	}
-	return c.SendOperation("create_sect", params)
+	return c.SendOperation("form_sect", params)
 }
 
 // JoinSect 加入宗门
@@ -345,51 +347,3 @@ func (c *WebSocketClient) UseSkill() error {
 	return c.SendOperation("use_skill", nil)
 }
 
-func RegisterDefaultHandlers() {
-	ws := GetWebSocketClient()
-
-	ws.RegisterHandler("combat_update", func(payload []byte) {
-		var update types.CombatState
-		if err := json.Unmarshal(payload, &update); err != nil {
-			fmt.Printf("Failed to unmarshal combat update: %v\n", err)
-			return
-		}
-		store.GetGameStore().SetCombat(&update)
-	})
-
-	ws.RegisterHandler("world_update", func(payload []byte) {
-		var update types.WorldState
-		if err := json.Unmarshal(payload, &update); err != nil {
-			fmt.Printf("Failed to unmarshal world update: %v\n", err)
-			return
-		}
-		store.GetGameStore().SetWorld(&update)
-	})
-
-	ws.RegisterHandler("social_update", func(payload []byte) {
-		var update types.SocialInfo
-		if err := json.Unmarshal(payload, &update); err != nil {
-			fmt.Printf("Failed to unmarshal social update: %v\n", err)
-			return
-		}
-		store.GetGameStore().SetSocial(&update)
-	})
-
-	ws.RegisterHandler("new_message", func(payload []byte) {
-		var update types.Message
-		if err := json.Unmarshal(payload, &update); err != nil {
-			fmt.Printf("Failed to unmarshal message: %v\n", err)
-			return
-		}
-		store.GetGameStore().AddMessage(update)
-	})
-
-	ws.RegisterHandler("op_result", func(payload []byte) {
-		var result types.OperationResult
-		if err := json.Unmarshal(payload, &result); err != nil {
-			fmt.Printf("Failed to unmarshal operation result: %v\n", err)
-			return
-		}
-		store.GetGameStore().SetLastOperationResult(&result)
-	})
-}

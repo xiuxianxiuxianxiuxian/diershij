@@ -13,8 +13,6 @@ import (
 	"cultivation-client/internal/store"
 	"cultivation-client/internal/types"
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -43,17 +41,17 @@ type SocialTab struct {
 
 	// 聊天输入
 	messageInput widget.Editor
-	sendBtn      widget.Clickable
+	sendBtn      *components.Button
 
 	// 好友操作按钮
-	addFriendBtn    widget.Clickable
-	deleteFriendBtn widget.Clickable
+	addFriendBtn    *components.Button
+	deleteFriendBtn *components.Button
 
 	// 添加好友对话框
 	showAddFriendDialog bool
 	addFriendInput      widget.Editor
-	addFriendConfirmBtn widget.Clickable
-	addFriendCancelBtn  widget.Clickable
+	addFriendConfirmBtn *components.Button
+	addFriendCancelBtn  *components.Button
 
 	// 反馈消息
 	feedbackMsg   string
@@ -67,6 +65,14 @@ type friendItem struct {
 }
 
 func NewSocialTab() *SocialTab {
+	addFriendBtn := components.NewButton("+")
+	addFriendBtn.Color = theme.DefaultTheme.Success
+	addFriendBtn.Inset = layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(8), Right: unit.Dp(8)}
+
+	deleteFriendBtn := components.NewButton("-")
+	deleteFriendBtn.Color = theme.DefaultTheme.Error
+	deleteFriendBtn.Inset = layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(8), Right: unit.Dp(8)}
+
 	return &SocialTab{
 		currentChannel: ChannelWorld,
 		friendItems:    make(map[string]*friendItem),
@@ -84,7 +90,12 @@ func NewSocialTab() *SocialTab {
 			SingleLine: true,
 			Submit:     true,
 		},
-		feedbackColor: theme.DefaultTheme.Success,
+		sendBtn:            btn("发送", theme.DefaultTheme.Primary),
+		addFriendBtn:       addFriendBtn,
+		deleteFriendBtn:    deleteFriendBtn,
+		addFriendConfirmBtn: btn("添加", theme.DefaultTheme.Primary),
+		addFriendCancelBtn:  btn("取消", theme.DefaultTheme.Border),
+		feedbackColor:      theme.DefaultTheme.Success,
 	}
 }
 
@@ -223,15 +234,11 @@ func (t *SocialTab) layoutAddFriendDialog(gtx layout.Context, content layout.Dim
 											Spacing:   layout.SpaceEvenly,
 										}.Layout(gtx,
 											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												btn := material.Button(th, &t.addFriendCancelBtn, "取消")
-												btn.Background = toNRGBA(theme.DefaultTheme.Border)
-												return btn.Layout(gtx)
+								return t.addFriendCancelBtn.Layout(gtx)
 											}),
 											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 												return layout.Inset{Left: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													btn := material.Button(th, &t.addFriendConfirmBtn, "添加")
-													btn.Background = toNRGBA(theme.DefaultTheme.Primary)
-													return btn.Layout(gtx)
+									return t.addFriendConfirmBtn.Layout(gtx)
 												})
 											}),
 										)
@@ -331,11 +338,11 @@ func (t *SocialTab) layoutFriendListHeader(gtx layout.Context, friendCount int) 
 				Alignment: layout.Middle,
 			}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return t.layoutIconButton(gtx, &t.addFriendBtn, "+", theme.DefaultTheme.Success)
+					return t.addFriendBtn.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Inset{Left: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return t.layoutIconButton(gtx, &t.deleteFriendBtn, "-", theme.DefaultTheme.Error)
+						return t.deleteFriendBtn.Layout(gtx)
 					})
 				}),
 			)
@@ -344,17 +351,6 @@ func (t *SocialTab) layoutFriendListHeader(gtx layout.Context, friendCount int) 
 }
 
 // 图标按钮
-func (t *SocialTab) layoutIconButton(gtx layout.Context, clickable *widget.Clickable, text string, btnColor color.RGBA) layout.Dimensions {
-	btn := material.Button(th, clickable, text)
-	btn.Background = toNRGBA(btnColor)
-	btn.Inset = layout.Inset{
-		Top:    unit.Dp(4),
-		Bottom: unit.Dp(4),
-		Left:   unit.Dp(8),
-		Right:  unit.Dp(8),
-	}
-	return btn.Layout(gtx)
-}
 
 // 好友列表项布局
 func (t *SocialTab) layoutFriends(gtx layout.Context, friends []types.Friend) layout.Dimensions {
@@ -409,7 +405,7 @@ func (t *SocialTab) layoutFriendItem(gtx layout.Context, friend types.Friend) la
 								statusColor = theme.DefaultTheme.Disabled
 							}
 							size := gtx.Dp(unit.Dp(8))
-							return drawStatusDot(gtx, statusColor, size)
+							return drawCircle(gtx, statusColor, image.Point{X: size, Y: size})
 						}),
 						// 好友名称和等级
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -682,10 +678,7 @@ func (t *SocialTab) layoutInputArea(gtx layout.Context) layout.Dimensions {
 		// 发送按钮
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				btn := material.Button(th, &t.sendBtn, "发送")
-				btn.Background = toNRGBA(theme.DefaultTheme.Primary)
-				btn.Inset = layout.UniformInset(unit.Dp(10))
-				return btn.Layout(gtx)
+					return t.sendBtn.Layout(gtx)
 			})
 		}),
 	)
@@ -817,12 +810,3 @@ func (t *SocialTab) showFeedback(msg string, color color.RGBA) {
 	t.feedbackColor = color
 }
 
-// 绘制状态点（在线/离线指示器）
-func drawStatusDot(gtx layout.Context, c color.RGBA, size int) layout.Dimensions {
-	defer clip.Ellipse{
-		Max: image.Point{X: size, Y: size},
-	}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: image.Point{X: size, Y: size}}
-}

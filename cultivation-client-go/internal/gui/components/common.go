@@ -22,22 +22,126 @@ func toNRGBA(c color.RGBA) color.NRGBA {
 	return color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A}
 }
 
+// ToNRGBA converts RGBA to NRGBA.
+func ToNRGBA(c color.RGBA) color.NRGBA {
+	return toNRGBA(c)
+}
+
+// DrawRect draws a filled rectangle.
+func DrawRect(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	return layout.Dimensions{Size: size}
+}
+
+// drawRect is an alias for DrawRect for internal use.
+func drawRect(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	return DrawRect(gtx, c, size)
+}
+
+// DrawRectWithRadius draws a filled rounded rectangle.
+func DrawRectWithRadius(gtx layout.Context, c color.RGBA, size image.Point, radius int) layout.Dimensions {
+	defer clip.RRect{
+		Rect: image.Rectangle{Max: size},
+		SE:   radius,
+		SW:   radius,
+		NE:   radius,
+		NW:   radius,
+	}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	return layout.Dimensions{Size: size}
+}
+
+func drawRectWithRadius(gtx layout.Context, c color.RGBA, size image.Point, radius int) layout.Dimensions {
+	return DrawRectWithRadius(gtx, c, size, radius)
+}
+
+// DrawCircle draws a filled circle.
+func DrawCircle(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	defer clip.Ellipse{
+		Max: size,
+	}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	return layout.Dimensions{Size: size}
+}
+
+func drawCircle(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	return DrawCircle(gtx, c, size)
+}
+
+// DrawDivider draws a horizontal 1px divider line.
+func DrawDivider(gtx layout.Context, c color.RGBA) layout.Dimensions {
+	size := gtx.Constraints.Max
+	size.Y = gtx.Dp(unit.Dp(1))
+	return DrawRect(gtx, c, size)
+}
+
+// DrawCardBackground draws a card-style rounded background.
+func DrawCardBackground(gtx layout.Context, c color.RGBA) layout.Dimensions {
+	size := gtx.Constraints.Max
+	return DrawRectWithRadius(gtx, c, size, 12)
+}
+
+// DrawAvatar draws a circular avatar placeholder.
+func DrawAvatar(gtx layout.Context, c color.RGBA) layout.Dimensions {
+	size := gtx.Dp(unit.Dp(80))
+	outerSize := size + gtx.Dp(unit.Dp(4))
+	defer clip.Ellipse{
+		Max: image.Point{X: outerSize, Y: outerSize},
+	}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: toNRGBA(theme.DefaultTheme.PrimaryVariant)}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+
+	innerOffset := (outerSize - size) / 2
+	return layout.Inset{
+		Top:    unit.Dp(innerOffset),
+		Left:   unit.Dp(innerOffset),
+		Right:  unit.Dp(0),
+		Bottom: unit.Dp(0),
+	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		defer clip.Ellipse{
+			Max: image.Point{X: size, Y: size},
+		}.Push(gtx.Ops).Pop()
+		paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+		return layout.Dimensions{Size: image.Point{X: size, Y: size}}
+	})
+}
+
+// DrawCheckmark draws a filled checkmark square.
+func DrawCheckmark(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	return layout.Dimensions{Size: size}
+}
+
+func drawCheckmark(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
+	return DrawCheckmark(gtx, c, size)
+}
+
 type Button struct {
 	Text   string
 	widget widget.Clickable
 	Color  color.RGBA
+	Inset  layout.Inset
 }
 
 func NewButton(text string) *Button {
 	return &Button{
 		Text:  text,
 		Color: theme.DefaultTheme.Primary,
+		Inset: layout.UniformInset(unit.Dp(12)),
 	}
 }
 
 func (b *Button) Layout(gtx layout.Context) layout.Dimensions {
 	btn := material.Button(th, &b.widget, b.Text)
 	btn.Background = toNRGBA(b.Color)
+	btn.Inset = b.Inset
 	return btn.Layout(gtx)
 }
 
@@ -234,17 +338,4 @@ func (l *ListItem) Layout(gtx layout.Context) layout.Dimensions {
 			}),
 		)
 	})
-}
-
-func drawRectWithRadius(gtx layout.Context, c color.RGBA, size image.Point, radius int) layout.Dimensions {
-	defer clip.RRect{
-		Rect: image.Rectangle{Max: size},
-		SE:   radius,
-		SW:   radius,
-		NE:   radius,
-		NW:   radius,
-	}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: size}
 }

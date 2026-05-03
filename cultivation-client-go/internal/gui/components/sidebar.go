@@ -1,13 +1,8 @@
 package components
 
 import (
-	"image"
-	"image/color"
-
 	"cultivation-client/internal/gui/theme"
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -56,99 +51,69 @@ func (s *Sidebar) SelectedID() string {
 }
 
 func (s *Sidebar) Layout(gtx layout.Context, selectedID string, onSelect func(string)) layout.Dimensions {
+	// 先绘制整个侧边栏背景
+	drawRect(gtx, theme.DefaultTheme.Background, gtx.Constraints.Max)
+
+	// 构建所有菜单项
+	rigidChildren := make([]layout.FlexChild, 0, len(s.Items)*2)
+	for i := range s.Items {
+		idx := i
+		rigidChildren = append(rigidChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutItem(gtx, idx, s.Items[idx].ID == selectedID, selectedID, onSelect)
+		}))
+		if i < len(s.Items)-1 {
+			rigidChildren = append(rigidChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				sz := gtx.Constraints.Max
+				sz.Y = gtx.Dp(unit.Dp(1))
+				return drawRect(gtx, theme.DefaultTheme.Border, sz)
+			}))
+		}
+	}
+
 	return layout.Flex{
 		Axis: layout.Vertical,
-	}.Layout(gtx,
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return layout.Stack{}.Layout(gtx,
-				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-					return drawRect(gtx, theme.DefaultTheme.Background, gtx.Constraints.Max)
-				}),
-				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{
-						Axis: layout.Vertical,
-					}.Layout(gtx, s.layoutItems(gtx, selectedID, onSelect)...)
-				}),
-			)
-		}),
-	)
+	}.Layout(gtx, rigidChildren...)
 }
 
-func (s *Sidebar) layoutItems(gtx layout.Context, selectedID string, onSelect func(string)) []layout.FlexChild {
-	children := make([]layout.FlexChild, 0, len(s.Items))
+func (s *Sidebar) layoutItem(gtx layout.Context, index int, isSelected bool, selectedID string, onSelect func(string)) layout.Dimensions {
+	item := &s.Items[index]
+	click := &s.clickables[index]
 
-	for i := range s.Items {
-		index := i
-		item := &s.Items[i]
-
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			minHeight := gtx.Dp(unit.Dp(48))
-			if gtx.Constraints.Min.Y < minHeight {
-				gtx.Constraints.Min.Y = minHeight
-			}
-			return s.layoutMenuItem(gtx, index, item, selectedID, onSelect)
-		}))
+	if click.Clicked(gtx) {
+		s.Selected = index
+		if onSelect != nil {
+			onSelect(item.ID)
+		}
 	}
 
-	return children
-}
-
-func (s *Sidebar) layoutMenuItem(gtx layout.Context, index int, item *SidebarItem, selectedID string, onSelect func(string)) layout.Dimensions {
-	isSelected := item.ID == selectedID
-	isHovered := s.clickables[index].Hovered()
-
-	bgColor := s.getBackgroundColor(isSelected, isHovered)
-
-	return s.clickables[index].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		if s.clickables[index].Clicked(gtx) {
-			s.Selected = index
-			if onSelect != nil {
-				onSelect(item.ID)
-			}
-		}
-
-		minHeight := gtx.Dp(unit.Dp(48))
-		if gtx.Constraints.Min.Y < minHeight {
-			gtx.Constraints.Min.Y = minHeight
-		}
-
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				return drawRect(gtx, bgColor, gtx.Constraints.Max)
-			}),
-			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{
-					Top:    unit.Dp(12),
-					Bottom: unit.Dp(12),
-					Left:   unit.Dp(16),
-					Right:  unit.Dp(16),
-				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					lbl := material.Label(th, unit.Sp(16), item.Label)
-					if isSelected {
-						lbl.Color = toNRGBA(theme.DefaultTheme.Text)
-					} else {
-						lbl.Color = toNRGBA(theme.DefaultTheme.TextSecondary)
-					}
-					return lbl.Layout(gtx)
-				})
-			}),
-		)
-	})
-}
-
-func (s *Sidebar) getBackgroundColor(isSelected, isHovered bool) color.RGBA {
+	bg := theme.DefaultTheme.Surface
 	if isSelected {
-		return theme.DefaultTheme.Active
+		bg = theme.DefaultTheme.Active
+	} else if click.Hovered() {
+		bg = theme.DefaultTheme.Hover
 	}
-	if isHovered {
-		return theme.DefaultTheme.Hover
-	}
-	return theme.DefaultTheme.Surface
-}
 
-func drawRect(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
-	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: size}
+	minH := gtx.Dp(unit.Dp(48))
+	gtx.Constraints.Min.Y = minH
+
+	return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		// 固定高度，确保每个项目高度一致
+		gtx.Constraints.Min.Y = minH
+		// 背景
+		drawRect(gtx, bg, gtx.Constraints.Max)
+		// 文字
+		return layout.Inset{
+			Top:    unit.Dp(12),
+			Left:   unit.Dp(16),
+			Bottom: unit.Dp(12),
+		}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			lbl := material.Label(th, unit.Sp(16), item.Label)
+			if isSelected {
+				lbl.Color = toNRGBA(theme.DefaultTheme.Text)
+			} else {
+				lbl.Color = toNRGBA(theme.DefaultTheme.TextSecondary)
+			}
+			return lbl.Layout(gtx)
+		})
+	})
 }

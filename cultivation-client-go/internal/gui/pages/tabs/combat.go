@@ -17,16 +17,20 @@ import (
 )
 
 type CombatTab struct {
-	attackBtn   widget.Clickable
-	skillBtn    widget.Clickable
-	fleeBtn     widget.Clickable
-	exploreBtn  widget.Clickable
+	attackBtn   *components.Button
+	skillBtn    *components.Button
+	fleeBtn     *components.Button
+	exploreBtn  *components.Button
 	list        widget.List
 	listAdapter *BattleLogList
 }
 
 func NewCombatTab() *CombatTab {
 	return &CombatTab{
+		attackBtn:   btn("攻击", theme.DefaultTheme.Error),
+		skillBtn:    btn("技能", theme.DefaultTheme.Primary),
+		fleeBtn:     btn("逃跑", theme.DefaultTheme.Warning),
+		exploreBtn:  btn("寻找敌人", theme.DefaultTheme.Primary),
 		list: widget.List{
 			List: layout.List{
 				Axis: layout.Vertical,
@@ -86,7 +90,7 @@ func (t *CombatTab) layoutNoCombat(gtx layout.Context) layout.Dimensions {
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return t.layoutExploreButton(gtx)
+					return t.exploreBtn.Layout(gtx)
 				})
 			})
 		}),
@@ -279,36 +283,30 @@ func (t *CombatTab) layoutActionButtons(gtx layout.Context) layout.Dimensions {
 			Alignment: layout.Middle,
 		}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return t.layoutButton(gtx, &t.attackBtn, "攻击", theme.DefaultTheme.Error)
+				return t.attackBtn.Layout(gtx)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return t.layoutButton(gtx, &t.skillBtn, "技能", theme.DefaultTheme.Primary)
+					return t.skillBtn.Layout(gtx)
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return t.layoutButton(gtx, &t.fleeBtn, "逃跑", theme.DefaultTheme.Warning)
+				return t.fleeBtn.Layout(gtx)
 			}),
 		)
 	})
-}
-
-func (t *CombatTab) layoutExploreButton(gtx layout.Context) layout.Dimensions {
-	return t.layoutButton(gtx, &t.exploreBtn, "寻找敌人", theme.DefaultTheme.Primary)
-}
-
-func (t *CombatTab) layoutButton(gtx layout.Context, clickable *widget.Clickable, text string, btnColor color.RGBA) layout.Dimensions {
-	btn := material.Button(th, clickable, text)
-	btn.Background = toNRGBA(btnColor)
-	btn.Inset = layout.UniformInset(unit.Dp(12))
-	return btn.Layout(gtx)
 }
 
 func (t *CombatTab) handleEvents(gtx layout.Context) {
 	ws := network.GetWebSocketClient()
 
 	if t.attackBtn.Clicked(gtx) {
-		if err := ws.SendOperation("combat", map[string]interface{}{}); err != nil {
+		params := map[string]interface{}{}
+		combat := store.GetGameStore().GetCombat()
+		if combat != nil && combat.CurrentEnemy != nil {
+			params["target_id"] = combat.CurrentEnemy.ID
+		}
+		if err := ws.SendOperation("combat", params); err != nil {
 			fmt.Printf("攻击失败: %v\n", err)
 		}
 	}

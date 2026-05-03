@@ -8,8 +8,6 @@ import (
 	"cultivation-client/internal/gui/theme"
 	"cultivation-client/internal/types"
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -260,18 +258,3 @@ func (i *Icon) Layout(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: gtx.Constraints.Constrain(image.Point{X: 24, Y: 24})}
 }
 
-func drawCircle(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
-	defer clip.Ellipse{
-		Max: size,
-	}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: size}
-}
-
-func drawCheckmark(gtx layout.Context, c color.RGBA, size image.Point) layout.Dimensions {
-	defer clip.Rect{Max: size}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: toNRGBA(c)}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	return layout.Dimensions{Size: size}
-}

@@ -65,25 +65,63 @@ func New() *CultivationApp {
 		app.navigateTo("login")
 	})
 
-	// 注册通知相关的 WebSocket 处理器
-	app.registerNotificationHandlers()
+	// 注册所有 WebSocket 处理器（数据更新 + 通知）
+	app.registerHandlers()
 
 	return app
 }
 
-// registerNotificationHandlers 注册通知相关的 WebSocket 处理器
-func (a *CultivationApp) registerNotificationHandlers() {
+// registerHandlers 注册所有 WebSocket 消息处理器（数据更新 + 通知）
+func (a *CultivationApp) registerHandlers() {
 	ws := network.GetWebSocketClient()
 
-	// 操作结果通知
+	// combat_update：战斗状态更新
+	ws.RegisterHandler("combat_update", func(payload []byte) {
+		var update types.CombatState
+		if err := json.Unmarshal(payload, &update); err != nil {
+			return
+		}
+		store.GetGameStore().SetCombat(&update)
+		if update.InCombat && update.CurrentEnemy != nil {
+			a.mainPage.GetNotificationManager().AddWarning("遭遇 " + update.CurrentEnemy.Name + "，战斗开始！")
+		}
+	})
+
+	// world_update：世界状态更新
+	ws.RegisterHandler("world_update", func(payload []byte) {
+		var update types.WorldState
+		if err := json.Unmarshal(payload, &update); err != nil {
+			return
+		}
+		store.GetGameStore().SetWorld(&update)
+	})
+
+	// social_update：社交信息更新
+	ws.RegisterHandler("social_update", func(payload []byte) {
+		var update types.SocialInfo
+		if err := json.Unmarshal(payload, &update); err != nil {
+			return
+		}
+		store.GetGameStore().SetSocial(&update)
+	})
+
+	// new_message：新消息
+	ws.RegisterHandler("new_message", func(payload []byte) {
+		var msg types.Message
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			return
+		}
+		store.GetGameStore().AddMessage(msg)
+		a.mainPage.GetNotificationManager().AddInfo("收到新消息来自 " + msg.SenderName)
+	})
+
+	// op_result：操作结果
 	ws.RegisterHandler("op_result", func(payload []byte) {
 		var result types.OperationResult
 		if err := json.Unmarshal(payload, &result); err != nil {
 			return
 		}
 		store.GetGameStore().SetLastOperationResult(&result)
-
-		// 在主线程显示通知
 		if result.Success {
 			a.mainPage.GetNotificationManager().AddSuccess(result.Message)
 		} else {
@@ -91,59 +129,58 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		}
 	})
 
-	// 实体更新通知
-	ws.RegisterHandler("entity_update", func(payload []byte) {
-		var entity types.Entity
-		if err := json.Unmarshal(payload, &entity); err != nil {
+	// state_sync：状态同步（初始全量同步）
+	ws.RegisterHandler("state_sync", func(payload []byte) {
+		var syncData struct {
+			RawEntity map[string]interface{} `json:"entity"`
+		}
+		if err := json.Unmarshal(payload, &syncData); err != nil || syncData.RawEntity == nil {
 			return
 		}
-
-		// 更新角色信息
-		char := store.GetGameStore().GetCharacter()
-		if char != nil && char.Name == entity.Name {
-			// 更新境界信息
-			char.CultivationRealm = entity.Realm
-			store.GetGameStore().SetCharacter(char)
-		}
+		store.GetGameStore().SetCharacterFromServerEntity(syncData.RawEntity)
 	})
 
-	// 新消息通知
-	ws.RegisterHandler("new_message", func(payload []byte) {
-		var msg types.Message
+	// entity_update：实体增量更新
+	ws.RegisterHandler("entity_update", func(payload []byte) {
+		var update struct {
+			RawEntity map[string]interface{} `json:"entity"`
+		}
+		if err := json.Unmarshal(payload, &update); err != nil || update.RawEntity == nil {
+			return
+		}
+		store.GetGameStore().SetCharacterFromServerEntity(update.RawEntity)
+	})
+
+	// chat：聊天消息
+	ws.RegisterHandler("chat", func(payload []byte) {
+		var msg struct {
+			SenderID   string `json:"sender_id"`
+			SenderName string `json:"sender_name"`
+			Content    string `json:"content"`
+			Channel    string `json:"channel"`
+		}
 		if err := json.Unmarshal(payload, &msg); err != nil {
 			return
 		}
-		store.GetGameStore().AddMessage(msg)
-
-		// 显示新消息通知
-		a.mainPage.GetNotificationManager().AddInfo("收到新消息来自 " + msg.SenderName)
+		store.GetGameStore().AddMessage(types.Message{
+			ID:         msg.SenderID,
+			SenderID:   msg.SenderID,
+			SenderName: msg.SenderName,
+			Content:    msg.Content,
+		})
 	})
 
-	// 连接断开通知
+	// disconnect：连接断开
 	ws.RegisterHandler("disconnect", func(payload []byte) {
 		a.mainPage.GetNotificationManager().AddWarning("与服务器的连接已断开，正在尝试重连...")
 	})
 
-	// 连接恢复通知
+	// connected：连接恢复
 	ws.RegisterHandler("connected", func(payload []byte) {
 		a.mainPage.GetNotificationManager().AddSuccess("已重新连接到服务器")
 	})
 
-	// 战斗更新通知
-	ws.RegisterHandler("combat_update", func(payload []byte) {
-		var update types.CombatState
-		if err := json.Unmarshal(payload, &update); err != nil {
-			return
-		}
-		store.GetGameStore().SetCombat(&update)
-
-		// 战斗开始/结束通知
-		if update.InCombat && update.CurrentEnemy != nil {
-			a.mainPage.GetNotificationManager().AddWarning("遭遇 " + update.CurrentEnemy.Name + "，战斗开始！")
-		}
-	})
-
-	// 世界事件通知
+	// world_event：世界事件
 	ws.RegisterHandler("world_event", func(payload []byte) {
 		var event types.WorldEvent
 		if err := json.Unmarshal(payload, &event); err != nil {
@@ -152,7 +189,7 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		a.mainPage.GetNotificationManager().AddInfo("世界事件: " + event.Description)
 	})
 
-	// 公告通知
+	// announcement：公告
 	ws.RegisterHandler("announcement", func(payload []byte) {
 		var announcement types.Announcement
 		if err := json.Unmarshal(payload, &announcement); err != nil {
@@ -165,7 +202,7 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		}
 	})
 
-	// 好友请求通知
+	// friend_request：好友请求
 	ws.RegisterHandler("friend_request", func(payload []byte) {
 		var request types.FriendRequest
 		if err := json.Unmarshal(payload, &request); err != nil {
@@ -174,7 +211,7 @@ func (a *CultivationApp) registerNotificationHandlers() {
 		a.mainPage.GetNotificationManager().AddInfo(request.FromName + " 向你发送了好友请求")
 	})
 
-	// 系统消息通知
+	// system_message：系统消息
 	ws.RegisterHandler("system_message", func(payload []byte) {
 		var data map[string]interface{}
 		if err := json.Unmarshal(payload, &data); err != nil {

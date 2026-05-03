@@ -60,6 +60,8 @@ type Config struct {
     GRPC         GRPCConfig         `json:"grpc"`
     LLM          LLMConfig          `json:"llm"`
     HeavenlyDao  HeavenlyDaoConfig  `json:"heavenly_dao"`
+    WorldEngine  GRPCConfig         `json:"world_engine"`
+    DaoService   GRPCConfig         `json:"dao_service"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -106,6 +108,14 @@ func LoadConfigFromEnv() *Config {
             ReasonModel: getEnv("LLM_REASON_MODEL", "deepseek-reasoner"),
             RateLimit:   getEnvInt("LLM_RATE_LIMIT", 600),
             Timeout:     getEnvInt("LLM_TIMEOUT", 10),
+        },
+        WorldEngine: GRPCConfig{
+            Host: getEnv("WORLD_ENGINE_HOST", "localhost"),
+            Port: getEnvInt("WORLD_ENGINE_PORT", 50054),
+        },
+        DaoService: GRPCConfig{
+            Host: getEnv("HEAVENLY_DAO_HOST", "localhost"),
+            Port: getEnvInt("HEAVENLY_DAO_PORT", 50053),
         },
     }
 }

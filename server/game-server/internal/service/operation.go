@@ -18,6 +18,9 @@ type OperationService struct {
 	spellRepo     SpellRepository
 	messageRepo   MessageRepository
 	worldService  WorldServiceClient
+	daoService    HeavenlyDaoClient
+	sectRepo      SectRepository
+	recipeRepo    RecipeRepository
 }
 
 type EntityRepository interface {
@@ -57,6 +60,33 @@ type WorldServiceClient interface {
 	SpawnResources(ctx context.Context, regionID string) error
 }
 
+type SectInfo struct {
+	ID        string
+	Name      string
+	FounderID string
+	Alignment string
+}
+
+type SectRepository interface {
+	Create(ctx context.Context, sectID string, name string, founderID string) error
+	GetByID(ctx context.Context, id string) (*SectInfo, error)
+	GetByName(ctx context.Context, name string) (*SectInfo, error)
+	AddMember(ctx context.Context, sectID string, entityID string, rank string) error
+	GetMember(ctx context.Context, sectID string, entityID string) (bool, error)
+	RemoveMember(ctx context.Context, sectID string, entityID string) error
+}
+
+type RecipeInfo struct {
+	ID         string
+	Type       string
+	Difficulty int
+	Name       string
+}
+
+type RecipeRepository interface {
+	GetByID(ctx context.Context, id string) (*RecipeInfo, error)
+}
+
 func NewOperationService(
 	entityRepo EntityRepository,
 	itemRepo ItemRepository,
@@ -64,6 +94,9 @@ func NewOperationService(
 	spellRepo SpellRepository,
 	messageRepo MessageRepository,
 	worldService WorldServiceClient,
+	daoService HeavenlyDaoClient,
+	sectRepo SectRepository,
+	recipeRepo RecipeRepository,
 ) *OperationService {
 	return &OperationService{
 		entityRepo:    entityRepo,
@@ -72,6 +105,9 @@ func NewOperationService(
 		spellRepo:     spellRepo,
 		messageRepo:   messageRepo,
 		worldService:  worldService,
+		daoService:    daoService,
+		sectRepo:      sectRepo,
+		recipeRepo:    recipeRepo,
 	}
 }
 
@@ -116,6 +152,18 @@ func (s *OperationService) Execute(ctx context.Context, op *types.Operation) (*t
 		return s.executeSendMessage(ctx, entity, op)
 	case types.ActionCastSpell:
 		return s.executeCastSpell(ctx, entity, op)
+	case types.ActionLeaveSect:
+		return s.executeLeaveSect(ctx, entity, op)
+	case types.ActionAddFriend:
+		return s.executeAddFriend(ctx, entity, op)
+	case types.ActionRemoveFriend:
+		return s.executeRemoveFriend(ctx, entity, op)
+	case types.ActionAcceptFriend:
+		return s.executeAcceptFriend(ctx, entity, op)
+	case types.ActionFlee:
+		return s.executeFlee(ctx, entity, op)
+	case types.ActionUseSkill:
+		return s.executeUseSkill(ctx, entity, op)
 	default:
 		return nil, errors.ErrInvalidOperationType
 	}
@@ -262,17 +310,32 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 		}, nil
 	}
 
-	successRate := 0.5 + float64(attr.Luck)/200.0
-	if successRate > 0.8 {
-		successRate = 0.8
-	}
-
 	newRealm := getNextRealm(entity.Realm)
 	if newRealm == "" {
 		return &types.OperationResult{
 			Success: false,
 			Message: "已达最高境界",
 		}, nil
+	}
+
+	// 天道劫数检查
+	if s.daoService != nil {
+		tribResult, err := s.daoService.CheckTribulation(ctx, string(entity.ID), string(newRealm))
+		if err == nil && !tribResult.Success {
+			return &types.OperationResult{
+				Success: false,
+				Message: "突破失败：" + tribResult.Reason,
+				Effects: map[string]interface{}{
+					"tribulation": true,
+					"severity":    tribResult.Severity,
+				},
+			}, nil
+		}
+	}
+
+	successRate := 0.5 + float64(attr.Luck)/200.0
+	if successRate > 0.8 {
+		successRate = 0.8
 	}
 
 	entity.Realm = newRealm
@@ -535,7 +598,7 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 
 // 炼器/炼丹
 func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
-	_, ok := op.Params["recipe_id"].(string)
+	recipeID, ok := op.Params["recipe_id"].(string)
 	if !ok {
 		return nil, errors.NewGameError(errors.ErrInvalidParams, "recipe_id is required")
 	}
@@ -543,9 +606,14 @@ func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entit
 	// 获取属性
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
 
-	// 获取配方（这里简化处理，实际应该从配方库查询）
-	// 假设配方难度为 3
+	// 查询配方
 	recipeDifficulty := 3
+	if s.recipeRepo != nil {
+		recipe, err := s.recipeRepo.GetByID(ctx, recipeID)
+		if err == nil && recipe != nil {
+			recipeDifficulty = recipe.Difficulty
+		}
+	}
 
 	// 计算成功率
 	successRate := 0.5 + float64(attr.AlchemyLevel-recipeDifficulty)*0.1
@@ -727,11 +795,19 @@ func (s *OperationService) executeFormSect(ctx context.Context, entity *types.En
 	attr.SpiritStones.LowGrade -= cost
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 
+	// 持久化宗门到数据库
+	sectID := string(types.GenerateEntityID())
+	if err := s.sectRepo.Create(ctx, sectID, sectName, string(entity.ID)); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "failed to create sect")
+	}
+	s.sectRepo.AddMember(ctx, sectID, string(entity.ID), "sect_leader")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: fmt.Sprintf("成功创建宗门：%s！", sectName),
 		Effects: map[string]interface{}{
 			"sect_name": sectName,
+			"sect_id":   sectID,
 			"cost":      cost,
 		},
 	}, nil
@@ -744,12 +820,34 @@ func (s *OperationService) executeJoinSect(ctx context.Context, entity *types.En
 		return nil, errors.NewGameError(errors.ErrInvalidParams, "sect_id is required")
 	}
 
-	// 简化处理，实际应该验证宗门存在性
+	// 验证宗门存在
+	sect, err := s.sectRepo.GetByID(ctx, sectID)
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "failed to query sect")
+	}
+	if sect == nil {
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "sect not found")
+	}
+
+	// 检查是否已经加入
+	existing, err := s.sectRepo.GetMember(ctx, sectID, string(entity.ID))
+	if err == nil && existing {
+		return &types.OperationResult{
+			Success: false,
+			Message: "已经在该宗门中",
+		}, nil
+	}
+
+	if err := s.sectRepo.AddMember(ctx, sectID, string(entity.ID), "member"); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "failed to join sect")
+	}
+
 	return &types.OperationResult{
 		Success: true,
-		Message: "申请加入宗门成功！",
+		Message: fmt.Sprintf("成功加入宗门：%s！", sect.Name),
 		Effects: map[string]interface{}{
-			"sect_id": sectID,
+			"sect_id":   sectID,
+			"sect_name": sect.Name,
 		},
 	}, nil
 }
@@ -840,6 +938,113 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 			"spell_name": spell.Name,
 			"damage":     damage,
 			"qi_cost":    spell.Cost,
+		},
+	}, nil
+}
+// 离开宗门
+func (s *OperationService) executeLeaveSect(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	if s.sectRepo == nil {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "sect system not available")
+	}
+	return &types.OperationResult{
+		Success: false,
+		Message: "功能开发中",
+	}, nil
+}
+
+// 添加好友
+func (s *OperationService) executeAddFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	name, ok := op.Params["name"].(string)
+	if !ok || name == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "name is required")
+	}
+	target, err := s.entityRepo.GetByName(ctx, name)
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "player not found")
+	}
+	if target == nil {
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "player not found")
+	}
+	if target.ID == entity.ID {
+		return &types.OperationResult{
+			Success: false,
+			Message: "不能添加自己为好友",
+		}, nil
+	}
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("已向 %s 发送好友请求", name),
+		Effects: map[string]interface{}{
+			"target_id":   string(target.ID),
+			"target_name": target.Name,
+		},
+	}, nil
+}
+
+// 删除好友
+func (s *OperationService) executeRemoveFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	friendID, ok := op.Params["friend_id"].(string)
+	if !ok || friendID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "friend_id is required")
+	}
+	return &types.OperationResult{
+		Success: true,
+		Message: "好友已删除",
+		Effects: map[string]interface{}{
+			"friend_id": friendID,
+		},
+	}, nil
+}
+
+// 接受好友请求
+func (s *OperationService) executeAcceptFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	requestID, ok := op.Params["request_id"].(string)
+	if !ok || requestID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "request_id is required")
+	}
+	return &types.OperationResult{
+		Success: true,
+		Message: "好友请求已接受",
+		Effects: map[string]interface{}{
+			"request_id": requestID,
+		},
+	}, nil
+}
+
+// 逃跑
+func (s *OperationService) executeFlee(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	if entity.Status != types.StatusCombat {
+		return &types.OperationResult{
+			Success: false,
+			Message: "当前不在战斗中",
+		}, nil
+	}
+	entity.Status = types.StatusNormal
+	entity.UpdatedAt = time.Now()
+	s.entityRepo.Update(ctx, entity)
+	return &types.OperationResult{
+		Success: true,
+		Message: "成功逃离战斗！",
+		Effects: map[string]interface{}{},
+	}, nil
+}
+
+// 使用技能
+func (s *OperationService) executeUseSkill(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	if entity.Status != types.StatusCombat {
+		return &types.OperationResult{
+			Success: false,
+			Message: "当前不在战斗中",
+		}, nil
+	}
+	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
+	skillDamage := 10 + float64(attr.AttackPower)*1.2
+	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+	return &types.OperationResult{
+		Success: true,
+		Message: "使用技能攻击！",
+		Effects: map[string]interface{}{
+			"damage": skillDamage,
 		},
 	}, nil
 }
