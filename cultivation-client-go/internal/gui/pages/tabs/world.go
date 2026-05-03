@@ -17,14 +17,13 @@ import (
 )
 
 type WorldTab struct {
-	exploreBtn    widget.Clickable
-	moveBtn       widget.Clickable
-	gatherBtn     widget.Clickable
-	eventList     widget.List
-	feedbackMsg   string
-	feedbackTime  time.Time
-	feedbackColor color.RGBA
-	showMoveDialog bool
+	exploreBtn     widget.Clickable
+	moveBtn        widget.Clickable
+	gatherBtn      widget.Clickable
+	eventList      widget.List
+	feedbackMsg    string
+	feedbackTime   time.Time
+	feedbackColor  color.RGBA
 	selectedRegion int
 }
 
@@ -35,7 +34,7 @@ func NewWorldTab() *WorldTab {
 				Axis: layout.Vertical,
 			},
 		},
-		feedbackColor: theme.DefaultTheme.Success,
+		feedbackColor:  theme.DefaultTheme.Success,
 		selectedRegion: -1,
 	}
 }
@@ -128,7 +127,7 @@ func (t *WorldTab) layoutAnnouncements(gtx layout.Context, world *types.WorldSta
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				announcement := world.Announcements[0]
 				bgColor := t.getAnnouncementColor(announcement.Priority)
-				
+
 				return layout.Stack{}.Layout(gtx,
 					layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 						size := gtx.Constraints.Max
@@ -513,25 +512,36 @@ func (t *WorldTab) handleActions(gtx layout.Context) {
 	}
 
 	if t.moveBtn.Clicked(gtx) {
-		t.showMoveDialog = true
-		regions := []string{"青云镇", "东荒", "北域", "南疆", "西域"}
+		regions := []struct {
+			id   string
+			name string
+		}{
+			{"qingyun_town", "青云镇"},
+			{"east_wilderness", "东荒"},
+			{"north_domain", "北域"},
+			{"south_region", "南疆"},
+			{"west_territory", "西域"},
+		}
+
 		if t.selectedRegion >= 0 && t.selectedRegion < len(regions) {
 			region := regions[t.selectedRegion]
-			if err := ws.Move(region, 0, 0); err != nil {
+			if err := ws.Move(region.id, 0, 0); err != nil {
 				t.showFeedback("移动失败: "+err.Error(), theme.DefaultTheme.Error)
 			} else {
-				t.showFeedback("正在前往 "+region+"...", theme.DefaultTheme.Success)
+				t.showFeedback("正在前往 "+region.name+"...", theme.DefaultTheme.Success)
 			}
 			t.selectedRegion = -1
-			t.showMoveDialog = false
 		} else {
-			t.showFeedback("请选择目标区域", theme.DefaultTheme.Warning)
-			t.selectedRegion = 0
+			t.showFeedback("请先探索以选择区域", theme.DefaultTheme.Warning)
 		}
 	}
 
 	if t.gatherBtn.Clicked(gtx) {
-		if err := ws.Gather("", 1); err != nil {
+		ws := network.GetWebSocketClient()
+		if err := ws.SendOperation("gather", map[string]interface{}{
+			"resource_type": "any",
+			"quantity":      1,
+		}); err != nil {
 			t.showFeedback("采集失败: "+err.Error(), theme.DefaultTheme.Error)
 		} else {
 			t.showFeedback("开始采集资源...", theme.DefaultTheme.Success)

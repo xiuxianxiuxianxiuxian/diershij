@@ -14,9 +14,9 @@ import (
 )
 
 type Sidebar struct {
-	Width     unit.Dp
-	Items     []SidebarItem
-	Selected  int
+	Width      unit.Dp
+	Items      []SidebarItem
+	Selected   int
 	clickables []widget.Clickable
 }
 
@@ -70,25 +70,25 @@ func (s *Sidebar) Layout(gtx layout.Context, selectedID string, onSelect func(st
 
 func (s *Sidebar) layoutItems(gtx layout.Context, selectedID string, onSelect func(string)) []layout.FlexChild {
 	children := make([]layout.FlexChild, 0, len(s.Items))
-	
+
 	for i := range s.Items {
 		index := i
 		item := &s.Items[i]
-		
+
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutMenuItem(gtx, index, item, selectedID, onSelect)
 		}))
 	}
-	
+
 	return children
 }
 
 func (s *Sidebar) layoutMenuItem(gtx layout.Context, index int, item *SidebarItem, selectedID string, onSelect func(string)) layout.Dimensions {
 	isSelected := item.ID == selectedID
 	isHovered := s.clickables[index].Hovered()
-	
+
 	bgColor := s.getBackgroundColor(isSelected, isHovered)
-	
+
 	return s.clickables[index].Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		if s.clickables[index].Clicked(gtx) {
 			s.Selected = index
@@ -96,7 +96,7 @@ func (s *Sidebar) layoutMenuItem(gtx layout.Context, index int, item *SidebarIte
 				onSelect(item.ID)
 			}
 		}
-		
+
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 				return drawRect(gtx, bgColor, gtx.Constraints.Max)

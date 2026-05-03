@@ -7,12 +7,12 @@ import (
 )
 
 type GameStore struct {
-	mu                 sync.RWMutex
-	character          *types.Character
-	world              *types.WorldState
-	combat             *types.CombatState
-	social             *types.SocialInfo
-	settings           *types.Settings
+	mu                  sync.RWMutex
+	character           *types.Character
+	world               *types.WorldState
+	combat              *types.CombatState
+	social              *types.SocialInfo
+	settings            *types.Settings
 	lastOperationResult *types.OperationResult
 }
 
@@ -23,12 +23,12 @@ func GetGameStore() *GameStore {
 	gameOnce.Do(func() {
 		gameInstance = &GameStore{
 			settings: &types.Settings{
-				AudioVolume:     0.8,
-				MusicVolume:     0.6,
+				AudioVolume:       0.8,
+				MusicVolume:       0.6,
 				ShowDamageNumbers: true,
-				AutoPlay:        false,
-				ShowFPS:         false,
-				Language:        "zh_CN",
+				AutoPlay:          false,
+				ShowFPS:           false,
+				Language:          "zh_CN",
 			},
 			combat: &types.CombatState{
 				InCombat:   false,

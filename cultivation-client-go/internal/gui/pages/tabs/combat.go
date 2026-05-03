@@ -308,22 +308,27 @@ func (t *CombatTab) handleEvents(gtx layout.Context) {
 	ws := network.GetWebSocketClient()
 
 	if t.attackBtn.Clicked(gtx) {
-		ws.Send("combat", map[string]interface{}{})
+		if err := ws.SendOperation("combat", map[string]interface{}{}); err != nil {
+			fmt.Printf("攻击失败: %v\n", err)
+		}
 	}
 
 	if t.skillBtn.Clicked(gtx) {
-		ws.Send("cast_spell", map[string]interface{}{})
+		if err := ws.SendOperation("use_skill", map[string]interface{}{}); err != nil {
+			fmt.Printf("使用技能失败: %v\n", err)
+		}
 	}
 
 	if t.fleeBtn.Clicked(gtx) {
-		ws.Send("operation", map[string]interface{}{
-			"type": "flee",
-			"data": map[string]interface{}{},
-		})
+		if err := ws.SendOperation("flee", map[string]interface{}{}); err != nil {
+			fmt.Printf("逃跑失败: %v\n", err)
+		}
 	}
 
 	if t.exploreBtn.Clicked(gtx) {
-		ws.Send("explore", map[string]interface{}{})
+		if err := ws.Explore(); err != nil {
+			fmt.Printf("探索失败: %v\n", err)
+		}
 	}
 }
 

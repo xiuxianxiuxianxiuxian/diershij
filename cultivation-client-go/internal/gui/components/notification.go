@@ -284,12 +284,12 @@ func (nm *NotificationManager) layoutNotification(gtx layout.Context, notif *Not
 
 	// 应用变换
 	op.Offset(image.Pt(int(offsetX), 0)).Add(gtx.Ops)
-	
+
 	// 应用透明度
 	if opacity < 1 {
 		paint.ColorOp{Color: color.NRGBA{A: uint8(255 * opacity)}}.Add(gtx.Ops)
 	}
-	
+
 	call.Add(gtx.Ops)
 
 	return dims

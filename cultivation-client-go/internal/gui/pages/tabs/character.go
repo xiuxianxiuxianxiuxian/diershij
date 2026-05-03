@@ -16,13 +16,13 @@ import (
 )
 
 type CharacterTab struct {
-	cultivateBtn   *components.Button
-	meditateBtn    *components.Button
-	sleepBtn       *components.Button
+	cultivateBtn    *components.Button
+	meditateBtn     *components.Button
+	sleepBtn        *components.Button
 	breakthroughBtn *components.Button
-	feedbackMsg    string
-	feedbackTime   time.Time
-	feedbackColor  color.RGBA
+	feedbackMsg     string
+	feedbackTime    time.Time
+	feedbackColor   color.RGBA
 }
 
 func NewCharacterTab() *CharacterTab {

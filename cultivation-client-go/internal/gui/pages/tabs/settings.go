@@ -28,8 +28,8 @@ type SettingsTab struct {
 	languages        []LanguageOption
 
 	// 按钮
-	saveButton   *components.Button
-	resetButton  *components.Button
+	saveButton  *components.Button
+	resetButton *components.Button
 
 	// 列表布局
 	list widget.List

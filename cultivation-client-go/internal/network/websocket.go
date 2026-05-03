@@ -155,13 +155,13 @@ func (c *WebSocketClient) readLoop() {
 			var msg types.WSMessage
 			if err := conn.ReadJSON(&msg); err != nil {
 				fmt.Printf("WebSocket read error: %v\n", err)
-				
+
 				// 触发连接断开通知
 				c.handleMessage(&types.WSMessage{
 					Type:    "disconnect",
 					Payload: map[string]interface{}{},
 				})
-				
+
 				c.reconnectLoop()
 				return
 			}
@@ -288,6 +288,61 @@ func (c *WebSocketClient) CastSpell(spellID string, targetID string) error {
 		"target_id": targetID,
 	}
 	return c.SendOperation("cast_spell", params)
+}
+
+// AddFriend 添加好友
+func (c *WebSocketClient) AddFriend(name string) error {
+	params := map[string]interface{}{
+		"name": name,
+	}
+	return c.SendOperation("add_friend", params)
+}
+
+// RemoveFriend 删除好友
+func (c *WebSocketClient) RemoveFriend(friendID string) error {
+	params := map[string]interface{}{
+		"friend_id": friendID,
+	}
+	return c.SendOperation("remove_friend", params)
+}
+
+// AcceptFriendRequest 接受好友请求
+func (c *WebSocketClient) AcceptFriendRequest(requestID string) error {
+	params := map[string]interface{}{
+		"request_id": requestID,
+	}
+	return c.SendOperation("accept_friend", params)
+}
+
+// CreateSect 创建宗门
+func (c *WebSocketClient) CreateSect(sectName string) error {
+	params := map[string]interface{}{
+		"sect_name": sectName,
+	}
+	return c.SendOperation("create_sect", params)
+}
+
+// JoinSect 加入宗门
+func (c *WebSocketClient) JoinSect(sectID string) error {
+	params := map[string]interface{}{
+		"sect_id": sectID,
+	}
+	return c.SendOperation("join_sect", params)
+}
+
+// LeaveSect 离开宗门
+func (c *WebSocketClient) LeaveSect() error {
+	return c.SendOperation("leave_sect", nil)
+}
+
+// Flee 逃跑
+func (c *WebSocketClient) Flee() error {
+	return c.SendOperation("flee", nil)
+}
+
+// UseSkill 使用技能
+func (c *WebSocketClient) UseSkill() error {
+	return c.SendOperation("use_skill", nil)
 }
 
 func RegisterDefaultHandlers() {
