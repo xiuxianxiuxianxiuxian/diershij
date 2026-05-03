@@ -158,27 +158,27 @@ func (r *EntityRepository) Update(ctx context.Context, entity *types.Entity) err
 }
 
 func (r *EntityRepository) GetAttributes(ctx context.Context, entityID types.EntityID) (*types.Attributes, error) {
-    query := `
-        SELECT qi, max_qi, spiritual_power, max_spiritual_power, divine_sense,
-               comprehension, constitution, luck, cultivation_progress,
-               attack_power, defense, speed, mental_stability,
-               remaining_lifespan, max_lifespan
-        FROM base_attributes WHERE entity_id = $1
-    `
+	query := `
+		SELECT qi, max_qi, spiritual_power, max_spiritual_power, divine_sense,
+		       comprehension, constitution, luck, cultivation_progress,
+		       attack_power, defense, speed, mental_stability,
+		       remaining_lifespan, max_lifespan
+		FROM base_attributes WHERE entity_id = $1
+	`
 
-    var attr types.Attributes
-    err := r.db.Pool().QueryRow(ctx, query, entityID).Scan(
-        &attr.Qi, &attr.MaxQi, &attr.SpiritualPower, &attr.MaxSpiritualPower,
-        &attr.DivineSense, &attr.Comprehension, &attr.Constitution, &attr.Luck,
-        &attr.CultivationProgress, &attr.AttackPower, &attr.Defense, &attr.Speed,
-        &attr.MentalStability, &attr.RemainingLifespan, &attr.MaxLifespan,
-    )
+	var attr types.Attributes
+	err := r.db.Pool().QueryRow(ctx, query, entityID).Scan(
+		&attr.Qi, &attr.MaxQi, &attr.SpiritualPower, &attr.MaxSpiritualPower,
+		&attr.DivineSense, &attr.Comprehension, &attr.Constitution, &attr.Luck,
+		&attr.CultivationProgress, &attr.AttackPower, &attr.Defense, &attr.Speed,
+		&attr.MentalStability, &attr.RemainingLifespan, &attr.MaxLifespan,
+	)
 
-    if err == pgx.ErrNoRows {
-        return &types.Attributes{}, nil
-    }
+	if err == pgx.ErrNoRows {
+		return &types.Attributes{}, nil
+	}
 
-    return &attr, err
+	return &attr, err
 }
 
 func (r *EntityRepository) UpdateAttributes(ctx context.Context, entityID types.EntityID, attr *types.Attributes) error {
