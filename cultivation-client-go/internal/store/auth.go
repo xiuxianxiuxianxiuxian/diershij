@@ -9,7 +9,6 @@ import (
 type AuthStore struct {
 	mu         sync.RWMutex
 	token      string
-	user       *types.User
 	entity     *types.Entity
 	isLoggedIn bool
 }
@@ -36,19 +35,6 @@ func (s *AuthStore) GetToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.token
-}
-
-func (s *AuthStore) SetUser(user *types.User) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.user = user
-	s.isLoggedIn = true
-}
-
-func (s *AuthStore) GetUser() *types.User {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.user
 }
 
 func (s *AuthStore) SetEntity(entity *types.Entity) {
@@ -92,7 +78,6 @@ func (s *AuthStore) Logout() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.token = ""
-	s.user = nil
 	s.entity = nil
 	s.isLoggedIn = false
 }

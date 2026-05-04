@@ -27,7 +27,14 @@ const (
     ActionRemoveFriend  ActionType = "remove_friend"
     ActionAcceptFriend  ActionType = "accept_friend"
     ActionFlee          ActionType = "flee"
+    ActionUseItem       ActionType = "use_item"
+    ActionDropItem      ActionType = "drop_item"
     ActionUseSkill      ActionType = "use_skill"
+    ActionEquipItem     ActionType = "equip_item"
+    ActionUnequipItem   ActionType = "unequip_item"
+    ActionLearnSpell    ActionType = "learn_spell"
+    ActionListFriends   ActionType = "list_friends"
+    ActionSectInfo      ActionType = "sect_info"
 )
 
 type Operation struct {

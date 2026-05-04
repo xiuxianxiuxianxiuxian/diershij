@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -11,7 +12,9 @@ import (
 	cultivation "github.com/cultivation-world/shared/proto/pb"
 	"github.com/cultivation-world/shared/config"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -36,6 +39,7 @@ func main() {
 	messageRepo := repository.NewPostgresMessageRepository(db)
 	sectRepo := repository.NewSectRepository(db)
 	recipeRepo := repository.NewRecipeRepository(db)
+	friendRepo := repository.NewFriendRepository(db)
 
 	worldConn, err := grpc.Dial(
 		fmt.Sprintf("%s:%d", cfg.WorldEngine.Host, cfg.WorldEngine.Port),
@@ -58,10 +62,20 @@ func main() {
 	daoClient := service.NewHeavenlyDaoGrpcClient(daoConn)
 
 	operationSvc := service.NewOperationService(entityRepo, itemRepo, inventoryRepo, spellRepo, messageRepo, worldClient, daoClient,
-		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo))
-	gameSvc := service.NewGameService(entityRepo, operationSvc)
+		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo), service.NewFriendRepoAdapter(friendRepo))
+	gameSvc := service.NewGameService(entityRepo, operationSvc, spellRepo, itemRepo, inventoryRepo)
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC recovered in %s: %v", info.FullMethod, r)
+					err = status.Errorf(codes.Internal, "internal server error")
+				}
+			}()
+			return handler(ctx, req)
+		}),
+	)
 	cultivation.RegisterGameServiceServer(grpcServer, gameSvc)
 
 	port := 50051

@@ -138,7 +138,209 @@ func (s *GameStore) GetLastOperationResult() *types.OperationResult {
 	return s.lastOperationResult
 }
 
-// getFloat64 safely extracts a float64 from a map, handling both float64 (JSON) and int types.
+// SetCharacterFromServerMap 从 state_sync/entity_update 的 map 数据填充角色
+func (s *GameStore) SetCharacterFromServerMap(rawEntity map[string]interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setCharacterFromMap(rawEntity)
+}
+
+// SetCharacterFromServerEntity 从 API 登录/注册响应的 ServerEntity 填充角色
+func (s *GameStore) SetCharacterFromServerEntity(se *types.ServerEntity) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.character == nil {
+		s.character = &types.Character{}
+	}
+	s.character.ID = se.ID
+	s.character.Name = se.Name
+	s.character.CultivationRealm = se.Realm
+	s.character.Level = realmToLevel(se.Realm)
+	if se.Attributes != nil {
+		s.applyAttributes(se.Attributes)
+	}
+}
+
+func (s *GameStore) setCharacterFromMap(rawEntity map[string]interface{}) {
+	if s.character == nil {
+		s.character = &types.Character{}
+	}
+	if id, ok := rawEntity["id"].(string); ok {
+		s.character.ID = id
+	}
+	if name, ok := rawEntity["name"].(string); ok {
+		s.character.Name = name
+	}
+	if realm, ok := rawEntity["realm"].(string); ok {
+		s.character.CultivationRealm = realm
+		s.character.Level = realmToLevel(realm)
+	}
+	if status, ok := rawEntity["status"].(string); ok {
+		s.character.Status = status
+	}
+	if attrs, ok := rawEntity["attributes"].(map[string]interface{}); ok {
+		s.applyAttributes(attrs)
+	}
+	if pos, ok := rawEntity["position"].(map[string]interface{}); ok {
+		if regionID, ok := pos["region_id"].(string); ok {
+			s.character.RegionID = regionID
+		}
+		if x, ok := getFloat64(pos, "x"); ok {
+			s.character.PositionX = x
+		}
+		if y, ok := getFloat64(pos, "y"); ok {
+			s.character.PositionY = y
+		}
+	}
+	if karma, ok := rawEntity["karma"].(map[string]interface{}); ok {
+		if kv, ok := getInt(karma, "karma_value"); ok {
+			s.character.KarmaValue = kv
+		}
+		if m, ok := getInt(karma, "merit"); ok {
+			s.character.Merit = m
+		}
+		if hm, ok := karma["heavenly_mark"].(string); ok {
+			s.character.HeavenlyMark = hm
+		}
+		if kd, ok := getInt(karma, "karmic_debt"); ok {
+			s.character.KarmicDebt = kd
+		}
+	}
+}
+
+func (s *GameStore) applyAttributes(attrs map[string]interface{}) {
+		if ss, ok := attrs["spirit_stones"].(map[string]interface{}); ok {
+			if lg, ok := getInt64(ss, "low_grade"); ok {
+				s.character.LowGradeStones = lg
+			}
+			if mg, ok := getInt64(ss, "medium_grade"); ok {
+				s.character.MediumGradeStones = mg
+			}
+			if hg, ok := getInt64(ss, "high_grade"); ok {
+				s.character.HighGradeStones = hg
+			}
+			if pg, ok := getInt64(ss, "premium_grade"); ok {
+				s.character.PremiumGradeStones = pg
+			}
+		}
+	if qi, ok := getFloat64(attrs, "qi"); ok {
+		s.character.Qi = qi
+		s.character.Health = int(qi)
+	}
+	if maxQi, ok := getFloat64(attrs, "max_qi"); ok {
+		s.character.MaxQi = maxQi
+		s.character.MaxHealth = int(maxQi)
+	}
+	if sp, ok := getFloat64(attrs, "spiritual_power"); ok {
+		s.character.SpiritualPower = sp
+		s.character.Energy = int(sp)
+	}
+	if maxSp, ok := getFloat64(attrs, "max_spiritual_power"); ok {
+		s.character.MaxSpiritualPower = maxSp
+		s.character.MaxEnergy = int(maxSp)
+	}
+	if atk, ok := getFloat64(attrs, "attack_power"); ok {
+		s.character.Attack = int(atk)
+	}
+	if def, ok := getFloat64(attrs, "defense"); ok {
+		s.character.Defense = int(def)
+	}
+	if speed, ok := getFloat64(attrs, "speed"); ok {
+		s.character.Speed = int(speed)
+	}
+	if prog, ok := getFloat64(attrs, "cultivation_progress"); ok {
+		s.character.CultivationProgress = prog
+	}
+	if comp, ok := getInt(attrs, "comprehension"); ok {
+		s.character.Comprehension = comp
+	}
+	if cons, ok := getInt(attrs, "constitution"); ok {
+		s.character.Constitution = cons
+	}
+	if luck, ok := getInt(attrs, "luck"); ok {
+		s.character.Luck = luck
+	}
+	if ds, ok := getFloat64(attrs, "divine_sense"); ok {
+		s.character.DivineSense = ds
+	}
+	if ms, ok := getInt(attrs, "mental_stability"); ok {
+		s.character.MentalStability = ms
+	}
+	if rl, ok := getInt(attrs, "remaining_lifespan"); ok {
+		s.character.RemainingLifespan = rl
+	}
+	if ml, ok := getInt(attrs, "max_lifespan"); ok {
+		s.character.MaxLifespan = ml
+	}
+	// 战斗属性
+	if cr, ok := getFloat64(attrs, "crit_rate"); ok {
+		s.character.CritRate = cr
+	}
+	if cd, ok := getFloat64(attrs, "crit_damage"); ok {
+		s.character.CritDamage = cd
+	}
+	if dr, ok := getFloat64(attrs, "dodge_rate"); ok {
+		s.character.DodgeRate = dr
+	}
+	if hr, ok := getFloat64(attrs, "hit_rate"); ok {
+		s.character.HitRate = hr
+	}
+	if pen, ok := getFloat64(attrs, "penetration"); ok {
+		s.character.Penetration = pen
+	}
+	if dmgRed, ok := getFloat64(attrs, "damage_reduction"); ok {
+		s.character.DamageReduction = dmgRed
+	}
+	// 生活技能
+	if al, ok := getInt(attrs, "alchemy_level"); ok {
+		s.character.AlchemyLevel = al
+	}
+	if arl, ok := getInt(attrs, "artificing_level"); ok {
+		s.character.ArtificingLevel = arl
+	}
+	if fl, ok := getInt(attrs, "formation_level"); ok {
+		s.character.FormationLevel = fl
+	}
+	if fc, ok := getInt(attrs, "fire_control"); ok {
+		s.character.FireControl = fc
+	}
+	if hk, ok := getInt(attrs, "herb_knowledge"); ok {
+		s.character.HerbKnowledge = hk
+	}
+	if ms, ok := getInt(attrs, "mining_skill"); ok {
+		s.character.MiningSkill = ms
+	}
+	if ts, ok := getInt(attrs, "talisman_skill"); ok {
+		s.character.TalismanSkill = ts
+	}
+	if bt, ok := getInt(attrs, "beast_taming"); ok {
+		s.character.BeastTaming = bt
+	}
+	// 社交
+	if rep, ok := getInt(attrs, "reputation"); ok {
+		s.character.Reputation = rep
+	}
+	if sc, ok := getInt(attrs, "sect_contribution"); ok {
+		s.character.SectContribution = sc
+	}
+	// 心境 / 灵性
+	if dh, ok := getInt(attrs, "dao_heart"); ok {
+		s.character.DaoHeart = dh
+	}
+	if en, ok := getInt(attrs, "enlightenment"); ok {
+		s.character.Enlightenment = en
+	}
+	if rp, ok := getInt(attrs, "root_purity"); ok {
+		s.character.RootPurity = rp
+	}
+	if pl, ok := getInt(attrs, "poison_level"); ok {
+		s.character.PoisonLevel = pl
+	}
+	if cl, ok := getInt(attrs, "curse_level"); ok {
+		s.character.CurseLevel = cl
+	}
+}
+
 func getFloat64(m map[string]interface{}, key string) (float64, bool) {
 	v, ok := m[key]
 	if !ok {
@@ -158,49 +360,41 @@ func getFloat64(m map[string]interface{}, key string) (float64, bool) {
 	}
 }
 
-// SetCharacterFromServerEntity converts a server-side entity map (from state_sync/entity_update)
-// into the client's Character struct and stores it.
-func (s *GameStore) SetCharacterFromServerEntity(rawEntity map[string]interface{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func getInt64(m map[string]interface{}, key string) (int64, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case uint64:
+		return int64(n), true
+	default:
+		return 0, false
+	}
+}
 
-	if s.character == nil {
-		s.character = &types.Character{}
+func getInt(m map[string]interface{}, key string) (int, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
 	}
-
-	if id, ok := rawEntity["id"].(string); ok {
-		s.character.ID = id
-	}
-	if name, ok := rawEntity["name"].(string); ok {
-		s.character.Name = name
-	}
-	if realm, ok := rawEntity["realm"].(string); ok {
-		s.character.CultivationRealm = realm
-	}
-
-	// Extract attributes sub-map
-	if attrs, ok := rawEntity["attributes"].(map[string]interface{}); ok {
-		if qi, ok := getFloat64(attrs, "qi"); ok {
-			s.character.Health = int(qi)
-		}
-		if maxQi, ok := getFloat64(attrs, "max_qi"); ok {
-			s.character.MaxHealth = int(maxQi)
-		}
-		if sp, ok := getFloat64(attrs, "spiritual_power"); ok {
-			s.character.Energy = int(sp)
-		}
-		if maxSp, ok := getFloat64(attrs, "max_spiritual_power"); ok {
-			s.character.MaxEnergy = int(maxSp)
-		}
-		if atk, ok := getFloat64(attrs, "attack_power"); ok {
-			s.character.Attack = int(atk)
-		}
-		if def, ok := getFloat64(attrs, "defense"); ok {
-			s.character.Defense = int(def)
-		}
-		if speed, ok := getFloat64(attrs, "speed"); ok {
-			s.character.Speed = int(speed)
-		}
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	default:
+		return 0, false
 	}
 }
 
@@ -220,4 +414,32 @@ func (s *GameStore) Clear() {
 		Requests: make([]types.FriendRequest, 0),
 	}
 	s.lastOperationResult = nil
+}
+
+// realmToLevel 根据修仙境界返回等级（1-100）
+func realmToLevel(realm string) int {
+	switch realm {
+	case "mortal":
+		return 1
+	case "qi_condensation":
+		return 10
+	case "foundation":
+		return 20
+	case "golden_core":
+		return 30
+	case "nascent_soul":
+		return 40
+	case "soul_transformation":
+		return 50
+	case "void_refinement":
+		return 60
+	case "integration":
+		return 70
+	case "mahayana":
+		return 80
+	case "tribulation":
+		return 90
+	default:
+		return 1
+	}
 }

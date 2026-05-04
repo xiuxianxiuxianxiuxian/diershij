@@ -15,6 +15,9 @@ message Entity {
     string status = 8;
     int64 created_at = 9;
     int64 updated_at = 10;
+    SpiritStones spirit_stones = 11;
+    repeated SpellData spells = 12;
+    repeated ItemData items = 13;
 }
 
 message WorldPosition {
@@ -39,12 +42,38 @@ message Attributes {
     int32 mental_stability = 13;
     int32 remaining_lifespan = 14;
     int32 max_lifespan = 15;
+    // Combat attributes
+    double crit_rate = 16;
+    double crit_damage = 17;
+    double dodge_rate = 18;
+    double hit_rate = 19;
+    double penetration = 20;
+    double damage_reduction = 21;
+    // Life skills
+    int32 alchemy_level = 22;
+    int32 artificing_level = 23;
+    int32 formation_level = 24;
+    int32 fire_control = 25;
+    int32 herb_knowledge = 26;
+    int32 mining_skill = 27;
+    int32 talisman_skill = 28;
+    int32 beast_taming = 29;
+    // Social
+    int32 reputation = 30;
+    int32 sect_contribution = 31;
+    // Mental / Spiritual
+    int32 dao_heart = 32;
+    int32 enlightenment = 33;
+    int32 root_purity = 34;
+    int32 poison_level = 35;
+    int32 curse_level = 36;
 }
 
 message Karma {
     int32 karma_value = 1;
     int32 merit = 2;
     string heavenly_mark = 3;
+    int32 karmic_debt = 4;
 }
 
 message SpiritStones {
@@ -52,4 +81,34 @@ message SpiritStones {
     int64 medium_grade = 2;
     int64 high_grade = 3;
     int64 premium_grade = 4;
+}
+
+message SpellData {
+    string spell_id = 1;
+    string name = 2;
+    string spell_type = 3;
+    string element = 4;
+    int32 cost = 5;
+    int32 base_damage = 6;
+    int32 base_heal = 7;
+    int32 cooldown = 8;
+    string description = 9;
+    string realm_requirement = 10;
+    int32 proficiency = 11;
+    int64 last_cast_at = 12;
+    int64 cooldown_remaining = 13;
+}
+
+message ItemData {
+    string inventory_id = 1;
+    string item_id = 2;
+    string name = 3;
+    string item_type = 4;
+    int32 rarity = 5;
+    string description = 6;
+    int32 quantity = 7;
+    bool equipped = 8;
+    string slot = 9;
+    int32 durability = 10;
+    bool bound = 11;
 }

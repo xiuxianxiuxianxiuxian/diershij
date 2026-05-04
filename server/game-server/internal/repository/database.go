@@ -174,6 +174,25 @@ func (r *EntityRepository) GetByID(ctx context.Context, id types.EntityID) (*typ
     return &entity, nil
 }
 
+func (r *EntityRepository) SetPasswordHash(ctx context.Context, entityID types.EntityID, hash string) error {
+	_, err := r.db.Pool().Exec(ctx,
+		"UPDATE entities SET password_hash = $2 WHERE id = $1",
+		entityID, hash,
+	)
+	return err
+}
+
+func (r *EntityRepository) GetPasswordHash(ctx context.Context, entityID types.EntityID) (string, error) {
+	var hash string
+	err := r.db.Pool().QueryRow(ctx,
+		"SELECT password_hash FROM entities WHERE id = $1", entityID,
+	).Scan(&hash)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
 func (r *EntityRepository) Update(ctx context.Context, entity *types.Entity) error {
     query := `
         UPDATE entities SET
@@ -250,7 +269,7 @@ func (r *EntityRepository) UpdateAttributes(ctx context.Context, entityID types.
             property_value, business_income, root_purity, poison_level, curse_level
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
                  $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                 $31, $32, $33, $34, $35, $36, $37, $38, $39, $40)
+                 $31, $32, $33, $34, $35, $36, $37, $38, $39)
         ON CONFLICT (entity_id) DO UPDATE SET
             qi = EXCLUDED.qi, max_qi = EXCLUDED.max_qi,
             spiritual_power = EXCLUDED.spiritual_power, max_spiritual_power = EXCLUDED.max_spiritual_power,
@@ -291,6 +310,10 @@ func (r *EntityRepository) UpdateAttributes(ctx context.Context, entityID types.
         return err
     }
     return r.spiritStones.Upsert(ctx, entityID, &attr.SpiritStones)
+}
+
+func (r *EntityRepository) UpdateKarma(ctx context.Context, entityID types.EntityID, karma *types.Karma) error {
+    return r.karma.Upsert(ctx, entityID, karma)
 }
 
 func (r *EntityRepository) CacheEntity(ctx context.Context, entity *types.Entity) error {

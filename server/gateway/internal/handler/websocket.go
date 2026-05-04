@@ -183,16 +183,18 @@ func (c *WebSocketClient) handleMessage(msg *types.Message) {
     case types.MessageTypeChat:
         c.handleChat(msg)
     default:
-        c.sendError("unknown message type")
+        c.sendError("unknown message type", "")
     }
 }
 
 func (c *WebSocketClient) handleOperation(msg *types.Message) {
     actionType, ok := msg.Payload["action_type"].(string)
     if !ok {
-        c.sendError("missing action_type")
+        c.sendError("missing action_type", "")
         return
     }
+
+    requestID, _ := msg.Payload["request_id"].(string)
 
     params := make(map[string]interface{})
     if p, ok := msg.Payload["params"].(map[string]interface{}); ok {
@@ -203,15 +205,16 @@ func (c *WebSocketClient) handleOperation(msg *types.Message) {
 
     result, err := c.gameClient.ExecuteOperation(op)
     if err != nil {
-        c.sendError(err.Error())
+        c.sendError(err.Error(), requestID)
         return
     }
 
     payload := map[string]interface{}{
-        "success":   result.Success,
-        "message":   result.Message,
-        "effects":   result.Effects,
-        "timestamp": result.Timestamp,
+        "success":     result.Success,
+        "message":    result.Message,
+        "effects":    result.Effects,
+        "timestamp":  result.Timestamp,
+        "request_id": requestID,
     }
     c.send <- types.Message{
         Type:    types.MessageTypeOpResult,
@@ -240,11 +243,15 @@ func (c *WebSocketClient) handleChat(msg *types.Message) {
     c.hub.BroadcastToAll(chatMsg)
 }
 
-func (c *WebSocketClient) sendError(message string) {
+func (c *WebSocketClient) sendError(message string, requestID string) {
+    payload := map[string]interface{}{
+        "message": message,
+    }
+    if requestID != "" {
+        payload["request_id"] = requestID
+    }
     c.send <- types.Message{
-        Type: types.MessageTypeError,
-        Payload: map[string]interface{}{
-            "message": message,
-        },
+        Type:    types.MessageTypeError,
+        Payload: payload,
     }
 }

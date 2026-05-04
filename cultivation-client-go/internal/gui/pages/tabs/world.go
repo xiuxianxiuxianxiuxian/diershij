@@ -135,7 +135,7 @@ func (t *WorldTab) layoutAnnouncements(gtx layout.Context, world *types.WorldSta
 					layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 						size := gtx.Constraints.Max
 						size.Y = gtx.Dp(unit.Dp(40))
-						return drawRectWithRadius(gtx, bgColor, size, 8)
+						return components.DrawRectWithRadius(gtx, bgColor, size, 8)
 					}),
 					layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{
@@ -189,7 +189,7 @@ func (t *WorldTab) layoutMapCard(gtx layout.Context, world *types.WorldState) la
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				return drawCardBackground(gtx, theme.DefaultTheme.Surface)
+				return components.DrawCardBackground(gtx, theme.DefaultTheme.Surface)
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -204,7 +204,7 @@ func (t *WorldTab) layoutMapCard(gtx layout.Context, world *types.WorldState) la
 								Top:    unit.Dp(12),
 								Bottom: unit.Dp(12),
 							}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return drawDivider(gtx, theme.DefaultTheme.Border)
+								return components.DrawDivider(gtx, theme.DefaultTheme.Border)
 							})
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -261,14 +261,27 @@ func (t *WorldTab) layoutMapHeader(gtx layout.Context, world *types.WorldState) 
 }
 
 func (t *WorldTab) layoutMapInfo(gtx layout.Context, world *types.WorldState) layout.Dimensions {
+	char := store.GetGameStore().GetCharacter()
+	posX := 0.0
+	posY := 0.0
+	regionID := "未知"
+	if char != nil {
+		posX = char.PositionX
+		posY = char.PositionY
+		regionID = char.RegionID
+		if regionID == "" {
+			regionID = "未知"
+		}
+	}
+
 	return layout.Flex{
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return t.layoutInfoItem(gtx, "坐标", "X: 128, Y: 256", "📍")
+			return t.layoutInfoItem(gtx, "坐标", fmt.Sprintf("X: %.0f, Y: %.0f", posX, posY), "📍")
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return t.layoutInfoItem(gtx, "区域", "安全区", "🛡️")
+			return t.layoutInfoItem(gtx, "区域", regionID, "🛡️")
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return t.layoutInfoItem(gtx, "天气", "晴朗", "☀️")
@@ -306,7 +319,7 @@ func (t *WorldTab) layoutEventList(gtx layout.Context, world *types.WorldState) 
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				return drawRectWithRadius(gtx, theme.DefaultTheme.Surface, gtx.Constraints.Max, 12)
+				return components.DrawRectWithRadius(gtx, theme.DefaultTheme.Surface, gtx.Constraints.Max, 12)
 			}),
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -340,7 +353,7 @@ func (t *WorldTab) layoutEventList(gtx layout.Context, world *types.WorldState) 
 								Top:    unit.Dp(12),
 								Bottom: unit.Dp(8),
 							}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return drawDivider(gtx, theme.DefaultTheme.Border)
+								return components.DrawDivider(gtx, theme.DefaultTheme.Border)
 							})
 						}),
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {

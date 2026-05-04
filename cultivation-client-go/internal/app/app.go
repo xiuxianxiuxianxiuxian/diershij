@@ -137,7 +137,7 @@ func (a *CultivationApp) registerHandlers() {
 		if err := json.Unmarshal(payload, &syncData); err != nil || syncData.RawEntity == nil {
 			return
 		}
-		store.GetGameStore().SetCharacterFromServerEntity(syncData.RawEntity)
+		store.GetGameStore().SetCharacterFromServerMap(syncData.RawEntity)
 	})
 
 	// entity_update：实体增量更新
@@ -148,7 +148,7 @@ func (a *CultivationApp) registerHandlers() {
 		if err := json.Unmarshal(payload, &update); err != nil || update.RawEntity == nil {
 			return
 		}
-		store.GetGameStore().SetCharacterFromServerEntity(update.RawEntity)
+		store.GetGameStore().SetCharacterFromServerMap(update.RawEntity)
 	})
 
 	// chat：聊天消息

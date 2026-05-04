@@ -83,40 +83,48 @@ func (c *APIClient) request(method, path string, body interface{}, result interf
 }
 
 // Login 用户登录
-func (c *APIClient) Login(username, password string) (*types.LoginResponse, error) {
-	req := types.LoginRequest{
-		Username: username,
-		Password: password,
-	}
+func (c *APIClient) Login(username, password string) (*types.AuthResponse, error) {
+	req := types.LoginRequest{Username: username, Password: password}
+	var resp types.AuthResponse
 
-	var resp types.LoginResponse
 	if err := c.request("POST", "/auth/login", req, &resp); err != nil {
 		return nil, err
 	}
 
-	if resp.Success {
+	if resp.Success && resp.Entity != nil {
 		store.GetAuthStore().SetToken(resp.Token)
-		store.GetAuthStore().SetEntity(&resp.Entity)
+		store.GetAuthStore().SetEntity(&types.Entity{
+			ID:         resp.Entity.ID,
+			Name:       resp.Entity.Name,
+			Realm:      resp.Entity.Realm,
+			EntityType: resp.Entity.EntityType,
+		})
+		// 立即用服务端数据填充角色信息
+		store.GetGameStore().SetCharacterFromServerEntity(resp.Entity)
 	}
 
 	return &resp, nil
 }
 
 // Register 用户注册
-func (c *APIClient) Register(username, password string) (*types.RegisterResponse, error) {
-	req := types.RegisterRequest{
-		Username: username,
-		Password: password,
-	}
+func (c *APIClient) Register(username, password string) (*types.AuthResponse, error) {
+	req := types.RegisterRequest{Username: username, Password: password}
+	var resp types.AuthResponse
 
-	var resp types.RegisterResponse
 	if err := c.request("POST", "/auth/register", req, &resp); err != nil {
 		return nil, err
 	}
 
-	if resp.Success {
+	if resp.Success && resp.Entity != nil {
 		store.GetAuthStore().SetToken(resp.Token)
-		store.GetAuthStore().SetEntity(&resp.Entity)
+		store.GetAuthStore().SetEntity(&types.Entity{
+			ID:         resp.Entity.ID,
+			Name:       resp.Entity.Name,
+			Realm:      resp.Entity.Realm,
+			EntityType: resp.Entity.EntityType,
+		})
+		// 立即用服务端数据填充角色信息
+		store.GetGameStore().SetCharacterFromServerEntity(resp.Entity)
 	}
 
 	return &resp, nil
@@ -130,9 +138,8 @@ func (c *APIClient) Logout() error {
 }
 
 // GetSettings 获取设置
-func (c *APIClient) GetSettings() (*types.Settings, error) {
-	settings := store.GetGameStore().GetSettings()
-	return settings, nil
+func (c *APIClient) GetSettings() *types.Settings {
+	return store.GetGameStore().GetSettings()
 }
 
 // UpdateSettings 更新设置

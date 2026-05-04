@@ -19,6 +19,7 @@ service GameService {
 message CreateEntityRequest {
     string name = 1;
     string entity_type = 2;
+    string password = 3;
 }
 
 message CreateEntityResponse {

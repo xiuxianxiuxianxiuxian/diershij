@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cultivation-client/internal/store"
@@ -20,6 +21,7 @@ type WebSocketClient struct {
 	handlers  map[string][]func([]byte)
 	sendChan  chan []byte
 	done      chan struct{}
+	reqID     atomic.Int64 // 自增请求ID
 }
 
 var wsInstance *WebSocketClient
@@ -52,7 +54,6 @@ func (c *WebSocketClient) Connect() error {
 		return fmt.Errorf("not authenticated")
 	}
 
-	// 构建带 token 的 URL
 	wsURL := fmt.Sprintf("%s?token=%s", c.url, token)
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -65,7 +66,6 @@ func (c *WebSocketClient) Connect() error {
 	c.connected = true
 	c.mu.Unlock()
 
-	// 触发连接成功通知
 	c.handleMessage(&types.WSMessage{
 		Type:    "connected",
 		Payload: map[string]interface{}{},
@@ -91,6 +91,12 @@ func (c *WebSocketClient) Disconnect() {
 	}
 }
 
+// nextRequestID 生成唯一的请求ID
+func (c *WebSocketClient) nextRequestID() string {
+	return fmt.Sprintf("cli_%d_%d", time.Now().UnixMilli(), c.reqID.Add(1))
+}
+
+// Send 发送 WebSocket 消息
 func (c *WebSocketClient) Send(messageType string, data interface{}) error {
 	payload, err := json.Marshal(data)
 	if err != nil {
@@ -158,7 +164,6 @@ func (c *WebSocketClient) readLoop() {
 			if err := conn.ReadJSON(&msg); err != nil {
 				fmt.Printf("WebSocket read error: %v\n", err)
 
-				// 触发连接断开通知
 				c.handleMessage(&types.WSMessage{
 					Type:    "disconnect",
 					Payload: map[string]interface{}{},
@@ -212,36 +217,40 @@ func (c *WebSocketClient) reconnectLoop() {
 	}
 }
 
-// SendOperation 发送 operation 类型的 WebSocket 消息
+// SendOperation 发送操作消息（自动附带 request_id）
 func (c *WebSocketClient) SendOperation(actionType string, params map[string]interface{}) error {
+	if params == nil {
+		params = make(map[string]interface{})
+	}
 	data := map[string]interface{}{
 		"action_type": actionType,
 		"params":      params,
+		"request_id":  c.nextRequestID(),
 	}
 	return c.Send("operation", data)
 }
 
-// Cultivate 修炼操作
+// Cultivate 修炼
 func (c *WebSocketClient) Cultivate() error {
 	return c.SendOperation("cultivate", nil)
 }
 
-// Meditate 打坐操作
+// Meditate 打坐
 func (c *WebSocketClient) Meditate() error {
 	return c.SendOperation("meditate", nil)
 }
 
-// Sleep 休息操作
+// Sleep 休息
 func (c *WebSocketClient) Sleep() error {
 	return c.SendOperation("sleep", nil)
 }
 
-// Breakthrough 突破操作
+// Breakthrough 突破
 func (c *WebSocketClient) Breakthrough() error {
 	return c.SendOperation("breakthrough", nil)
 }
 
-// Move 移动操作
+// Move 移动
 func (c *WebSocketClient) Move(regionID string, x, y float64) error {
 	params := map[string]interface{}{
 		"region_id": regionID,
@@ -251,7 +260,7 @@ func (c *WebSocketClient) Move(regionID string, x, y float64) error {
 	return c.SendOperation("move", params)
 }
 
-// Combat 战斗操作
+// Combat 战斗
 func (c *WebSocketClient) Combat(targetID string) error {
 	params := map[string]interface{}{
 		"target_id": targetID,
@@ -259,7 +268,7 @@ func (c *WebSocketClient) Combat(targetID string) error {
 	return c.SendOperation("combat", params)
 }
 
-// Gather 采集操作
+// Gather 采集
 func (c *WebSocketClient) Gather(resourceType string, quantity int) error {
 	params := map[string]interface{}{
 		"resource_type": resourceType,
@@ -268,22 +277,22 @@ func (c *WebSocketClient) Gather(resourceType string, quantity int) error {
 	return c.SendOperation("gather", params)
 }
 
-// Explore 探索操作
+// Explore 探索
 func (c *WebSocketClient) Explore() error {
 	return c.SendOperation("explore", nil)
 }
 
-// SendMessage 发送消息
+// SendMessage 发消息
 func (c *WebSocketClient) SendMessage(content string, msgType string, receiverID string) error {
 	params := map[string]interface{}{
-		"content":       content,
-		"message_type":  msgType,
-		"receiver_id":   receiverID,
+		"content":      content,
+		"message_type": msgType,
+		"receiver_id":  receiverID,
 	}
 	return c.SendOperation("send_message", params)
 }
 
-// CastSpell 施法操作
+// CastSpell 施法
 func (c *WebSocketClient) CastSpell(spellID string, targetID string) error {
 	params := map[string]interface{}{
 		"spell_id":  spellID,
@@ -292,7 +301,7 @@ func (c *WebSocketClient) CastSpell(spellID string, targetID string) error {
 	return c.SendOperation("cast_spell", params)
 }
 
-// AddFriend 添加好友
+// AddFriend 加好友
 func (c *WebSocketClient) AddFriend(name string) error {
 	params := map[string]interface{}{
 		"name": name,
@@ -347,3 +356,25 @@ func (c *WebSocketClient) UseSkill() error {
 	return c.SendOperation("use_skill", nil)
 }
 
+// Craft 炼制（炼器/炼丹）
+func (c *WebSocketClient) Craft(recipeID string) error {
+	params := map[string]interface{}{
+		"recipe_id": recipeID,
+	}
+	return c.SendOperation("craft", params)
+}
+
+// Trade 交易
+func (c *WebSocketClient) Trade(targetID string, itemID string, price float64) error {
+	params := map[string]interface{}{
+		"target_id": targetID,
+		"item_id":   itemID,
+		"price":     price,
+	}
+	return c.SendOperation("trade", params)
+}
+
+// CreateMethod 自创功法
+func (c *WebSocketClient) CreateMethod() error {
+	return c.SendOperation("create_method", nil)
+}

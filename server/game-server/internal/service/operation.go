@@ -21,6 +21,7 @@ type OperationService struct {
 	daoService    HeavenlyDaoClient
 	sectRepo      SectRepository
 	recipeRepo    RecipeRepository
+	friendRepo    FriendRepository
 }
 
 type EntityRepository interface {
@@ -30,14 +31,20 @@ type EntityRepository interface {
 	Update(ctx context.Context, entity *types.Entity) error
 	GetAttributes(ctx context.Context, entityID types.EntityID) (*types.Attributes, error)
 	UpdateAttributes(ctx context.Context, entityID types.EntityID, attr *types.Attributes) error
+	UpdateKarma(ctx context.Context, entityID types.EntityID, karma *types.Karma) error
+	SetPasswordHash(ctx context.Context, entityID types.EntityID, hash string) error
+	GetPasswordHash(ctx context.Context, entityID types.EntityID) (string, error)
 }
 
 type ItemRepository interface {
 	GetByID(ctx context.Context, id types.ItemID) (*types.Item, error)
 	GetByName(ctx context.Context, name string) (*types.Item, error)
+	Create(ctx context.Context, item *types.Item) error
 }
 
 type InventoryRepository interface {
+	UnequipItem(ctx context.Context, entityID types.EntityID, slot string) error
+	GetEquippedItems(ctx context.Context, entityID types.EntityID) ([]*types.InventoryItem, error)
 	GetByEntityID(ctx context.Context, entityID types.EntityID) ([]*types.InventoryItem, error)
 	GetItem(ctx context.Context, entityID types.EntityID, itemID types.ItemID) (*types.InventoryItem, error)
 	AddItem(ctx context.Context, entityID types.EntityID, itemID types.ItemID, quantity int) error
@@ -47,8 +54,10 @@ type InventoryRepository interface {
 
 type SpellRepository interface {
 	GetByID(ctx context.Context, id types.SpellID) (*types.Spell, error)
+	GetEntitySpells(ctx context.Context, entityID types.EntityID) ([]*types.EntitySpell, error)
 	GetEntitySpell(ctx context.Context, entityID types.EntityID, spellID types.SpellID) (*types.EntitySpell, error)
 	UpdateSpellCastTime(ctx context.Context, entityID types.EntityID, spellID types.SpellID) error
+	LearnSpell(ctx context.Context, entityID types.EntityID, spellID types.SpellID) error
 }
 
 type MessageRepository interface {
@@ -74,6 +83,15 @@ type SectRepository interface {
 	AddMember(ctx context.Context, sectID string, entityID string, rank string) error
 	GetMember(ctx context.Context, sectID string, entityID string) (bool, error)
 	RemoveMember(ctx context.Context, sectID string, entityID string) error
+	ListMembers(ctx context.Context, sectID string) ([]*SectMemberInfo, error)
+}
+
+type SectMemberInfo struct {
+	EntityID     string  `json:"entity_id"`
+	Name         string  `json:"name"`
+	Rank         string  `json:"rank"`
+	Contribution float64 `json:"contribution"`
+	JoinedAt     int64   `json:"joined_at"`
 }
 
 type RecipeInfo struct {
@@ -87,6 +105,35 @@ type RecipeRepository interface {
 	GetByID(ctx context.Context, id string) (*RecipeInfo, error)
 }
 
+type FriendRepository interface {
+	AddFriend(ctx context.Context, entityID, friendID string) error
+	RemoveFriend(ctx context.Context, entityID, friendID string) error
+	AreFriends(ctx context.Context, entityID, friendID string) (bool, error)
+	CreateRequest(ctx context.Context, fromID, toID string) (string, error)
+	GetPendingRequest(ctx context.Context, fromID, toID string) (*FriendInfo, error)
+	GetRequestByID(ctx context.Context, requestID string) (*FriendRequestInfo, error)
+	AcceptRequest(ctx context.Context, requestID string) error
+	GetFriends(ctx context.Context, entityID string) ([]*FriendshipInfo, error)
+}
+
+type FriendshipInfo struct {
+	FriendID  string `json:"friend_id"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type FriendInfo struct {
+	ID        string
+	FromID    string
+	ToID      string
+}
+
+type FriendRequestInfo struct {
+	ID     string
+	FromID string
+	ToID   string
+	Status string
+}
+
 func NewOperationService(
 	entityRepo EntityRepository,
 	itemRepo ItemRepository,
@@ -97,6 +144,7 @@ func NewOperationService(
 	daoService HeavenlyDaoClient,
 	sectRepo SectRepository,
 	recipeRepo RecipeRepository,
+	friendRepo FriendRepository,
 ) *OperationService {
 	return &OperationService{
 		entityRepo:    entityRepo,
@@ -108,6 +156,7 @@ func NewOperationService(
 		daoService:    daoService,
 		sectRepo:      sectRepo,
 		recipeRepo:    recipeRepo,
+		friendRepo:    friendRepo,
 	}
 }
 
@@ -118,7 +167,7 @@ func (s *OperationService) Execute(ctx context.Context, op *types.Operation) (*t
 	}
 
 	if entity.Status == types.StatusDead {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "entity is dead")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "角色已死亡")
 	}
 
 	switch op.ActionType {
@@ -164,9 +213,33 @@ func (s *OperationService) Execute(ctx context.Context, op *types.Operation) (*t
 		return s.executeFlee(ctx, entity, op)
 	case types.ActionUseSkill:
 		return s.executeUseSkill(ctx, entity, op)
+	case types.ActionUseItem:
+		return s.executeUseItem(ctx, entity, op)
+	case types.ActionDropItem:
+		return s.executeDropItem(ctx, entity, op)
+	case types.ActionEquipItem:
+		return s.executeEquipItem(ctx, entity, op)
+	case types.ActionUnequipItem:
+		return s.executeUnequipItem(ctx, entity, op)
+	case types.ActionLearnSpell:
+		return s.executeLearnSpell(ctx, entity, op)
+	case types.ActionListFriends:
+		return s.executeListFriends(ctx, entity, op)
+	case types.ActionSectInfo:
+		return s.executeSectInfo(ctx, entity, op)
 	default:
 		return nil, errors.ErrInvalidOperationType
 	}
+}
+
+// modifyKarma 增加实体业力值并持久化
+func (s *OperationService) modifyKarma(ctx context.Context, entityID types.EntityID, delta int, reason string) {
+	entity, err := s.entityRepo.GetByID(ctx, entityID)
+	if err != nil || entity == nil {
+		return
+	}
+	entity.Karma.KarmaValue += delta
+	s.entityRepo.UpdateKarma(ctx, entityID, &entity.Karma)
 }
 
 // 修炼
@@ -191,6 +264,8 @@ func (s *OperationService) executeCultivate(ctx context.Context, entity *types.E
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
 
+	s.modifyKarma(ctx, entity.ID, 1, "修炼增长业力")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "修炼中，修为增加",
@@ -206,6 +281,12 @@ func (s *OperationService) executeMove(ctx context.Context, entity *types.Entity
 	regionID, ok := op.Params["region_id"].(string)
 	if !ok {
 		return nil, errors.ErrInvalidParams_
+	}
+
+	// 验证区域存在
+	region, err := s.worldService.GetRegion(ctx, regionID)
+	if err != nil || region == nil {
+		return nil, errors.NewGameError(errors.ErrRegionNotFound, "区域不存在")
 	}
 
 	x, _ := op.Params["x"].(float64)
@@ -258,6 +339,8 @@ func (s *OperationService) executeMeditate(ctx context.Context, entity *types.En
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
 
+	s.modifyKarma(ctx, entity.ID, 2, "打坐恢复")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "打坐恢复中",
@@ -286,6 +369,8 @@ func (s *OperationService) executeSleep(ctx context.Context, entity *types.Entit
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
 
+	s.modifyKarma(ctx, entity.ID, 3, "休息恢复")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "休息完成，状态已恢复",
@@ -296,6 +381,7 @@ func (s *OperationService) executeSleep(ctx context.Context, entity *types.Entit
 	}, nil
 }
 
+// 休息
 // 突破
 func (s *OperationService) executeBreakthrough(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	attr, err := s.entityRepo.GetAttributes(ctx, entity.ID)
@@ -338,6 +424,21 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 		successRate = 0.8
 	}
 
+	// 随机判定突破是否成功
+	if rand.Float64() > successRate {
+		attr.CultivationProgress = 0
+		if err := s.entityRepo.UpdateAttributes(ctx, entity.ID, attr); err != nil {
+			return nil, err
+		}
+		return &types.OperationResult{
+			Success: false,
+			Message: "突破失败，修为尽失！",
+			Effects: map[string]interface{}{
+				"success_rate": successRate,
+			},
+		}, nil
+	}
+
 	entity.Realm = newRealm
 	attr.CultivationProgress = 0
 	attr.MaxQi *= 1.5
@@ -350,6 +451,8 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
+
+	s.modifyKarma(ctx, entity.ID, 5, "突破成功")
 
 	return &types.OperationResult{
 		Success: true,
@@ -367,23 +470,23 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 func (s *OperationService) executeCombat(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	targetID, ok := op.Params["target_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "target_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少目标ID")
 	}
 
 	// 获取目标
 	target, err := s.entityRepo.GetByID(ctx, types.EntityID(targetID))
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrEntityNotFound, "target not found")
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "目标不存在")
 	}
 
 	// 检查目标状态
 	if target.Status == types.StatusDead {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "target is already dead")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "目标已死亡")
 	}
 
 	// 检查是否在同一区域
 	if entity.Position.RegionID != target.Position.RegionID {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "target is not in the same region")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "目标不在同一区域")
 	}
 
 	// 获取属性
@@ -393,7 +496,7 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 	// 计算距离
 	distance := math.Sqrt(math.Pow(entity.Position.X-target.Position.X, 2) + math.Pow(entity.Position.Y-target.Position.Y, 2))
 	if distance > 10 {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "target is too far away")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "目标太远")
 	}
 
 	// 战斗计算
@@ -418,6 +521,12 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 	s.entityRepo.UpdateAttributes(ctx, target.ID, targetAttr)
 	s.entityRepo.Update(ctx, entity)
 	s.entityRepo.Update(ctx, target)
+
+	karmaChange := -2
+	if result.Killed {
+		karmaChange = -10
+	}
+	s.modifyKarma(ctx, entity.ID, karmaChange, "战斗")
 
 	return &types.OperationResult{
 		Success: true,
@@ -477,13 +586,13 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 	// 获取区域信息
 	region, err := s.worldService.GetRegion(ctx, entity.Position.RegionID)
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrRegionNotFound, "region not found")
+		return nil, errors.NewGameError(errors.ErrRegionNotFound, "区域不存在")
 	}
 
 	// 消耗灵气
 	qiCost := float64(region.SpiritualTier) * 5
 	if attr.Qi < qiCost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough qi")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵力不足")
 	}
 	attr.Qi -= qiCost
 
@@ -507,6 +616,7 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 	if len(region.Resources) > 0 && rand.Float64() < 0.4 {
 		resource := region.Resources[rand.Intn(len(region.Resources))]
 		discoveries = append(discoveries, fmt.Sprintf("发现了%s", resource.Name))
+		s.ensureItemInInventory(ctx, entity.ID, resource.Name, types.ItemTypeMaterial, resource.Rarity)
 	}
 
 	// 奇遇事件
@@ -517,6 +627,8 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 	entity.Status = types.StatusExploring
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 	s.entityRepo.Update(ctx, entity)
+
+	s.modifyKarma(ctx, entity.ID, 1, "探索")
 
 	return &types.OperationResult{
 		Success: true,
@@ -532,7 +644,7 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 func (s *OperationService) executeGather(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	resourceType, ok := op.Params["resource_type"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "resource_type is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少资源类型")
 	}
 
 	quantity, _ := op.Params["quantity"].(float64)
@@ -543,7 +655,7 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 	// 获取区域信息
 	region, err := s.worldService.GetRegion(ctx, entity.Position.RegionID)
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrRegionNotFound, "region not found")
+		return nil, errors.NewGameError(errors.ErrRegionNotFound, "区域不存在")
 	}
 
 	// 查找资源
@@ -556,11 +668,11 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 	}
 
 	if targetResource == nil {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "resource not found in this region")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "该区域没有此资源")
 	}
 
 	if targetResource.Quantity < int(quantity) {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough resources")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "资源不足")
 	}
 
 	// 获取属性
@@ -569,7 +681,7 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 	// 消耗灵气
 	qiCost := float64(targetResource.Rarity) * 5 * quantity
 	if attr.Qi < qiCost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough qi")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵力不足")
 	}
 	attr.Qi -= qiCost
 
@@ -579,10 +691,13 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 	// 创建物品（简化处理，实际应该根据资源类型创建对应物品）
 	// 这里假设资源直接作为物品添加到背包
 
+	s.ensureItemInInventory(ctx, entity.ID, targetResource.Name, types.ItemTypeMaterial, targetResource.Rarity)
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 
 	// 刷新资源
 	s.worldService.SpawnResources(ctx, string(region.ID))
+
+	s.modifyKarma(ctx, entity.ID, 1, "采集")
 
 	return &types.OperationResult{
 		Success: true,
@@ -600,7 +715,7 @@ func (s *OperationService) executeGather(ctx context.Context, entity *types.Enti
 func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	recipeID, ok := op.Params["recipe_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "recipe_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少配方ID")
 	}
 
 	// 获取属性
@@ -628,7 +743,7 @@ func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entit
 	// 消耗灵气
 	qiCost := float64(recipeDifficulty) * 20
 	if attr.Qi < qiCost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough qi")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵力不足")
 	}
 	attr.Qi -= qiCost
 
@@ -650,6 +765,10 @@ func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entit
 	attr.AlchemyLevel += 1
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 
+	s.ensureItemInInventory(ctx, entity.ID, "crafted_"+recipeID, types.ItemTypePill, recipeDifficulty)
+
+	s.modifyKarma(ctx, entity.ID, 2, "炼制成功")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "制作成功！",
@@ -665,14 +784,14 @@ func (s *OperationService) executeCraft(ctx context.Context, entity *types.Entit
 func (s *OperationService) executeCreateMethod(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	// 验证境界
 	if types.CultivationRealmLevel(entity.Realm) < types.CultivationRealmLevel(types.RealmNascentSoul) {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "requires Nascent Soul realm or higher")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "需要元婴期或更高境界")
 	}
 
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
 
 	// 验证悟性
 	if attr.Comprehension < 80 {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "comprehension must be at least 80")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "悟性需要达到80")
 	}
 
 	// 消耗资源
@@ -680,10 +799,10 @@ func (s *OperationService) executeCreateMethod(ctx context.Context, entity *type
 	spCost := float64(attr.DivineSense) * 0.5
 
 	if attr.Qi < qiCost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough qi")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵力不足")
 	}
 	if attr.SpiritualPower < spCost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough spiritual power")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "神识不足")
 	}
 
 	attr.Qi -= qiCost
@@ -722,28 +841,28 @@ func (s *OperationService) calculateMethodQuality(attr *types.Attributes) string
 func (s *OperationService) executeTrade(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	targetID, ok := op.Params["target_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "target_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少目标ID")
 	}
 
 	itemID, ok := op.Params["item_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "item_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少物品ID")
 	}
 
 	price, ok := op.Params["price"].(float64)
 	if !ok || price <= 0 {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "invalid price")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "价格无效")
 	}
 
 	// 获取目标
 	target, err := s.entityRepo.GetByID(ctx, types.EntityID(targetID))
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrEntityNotFound, "target not found")
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "目标不存在")
 	}
 
 	// 检查是否在同一区域
 	if entity.Position.RegionID != target.Position.RegionID {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "target is not in the same region")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "目标不在同一区域")
 	}
 
 	// 获取属性
@@ -752,7 +871,7 @@ func (s *OperationService) executeTrade(ctx context.Context, entity *types.Entit
 
 	// 检查灵石
 	if targetAttr.SpiritStones.LowGrade < int64(price) {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "target does not have enough spirit stones")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "目标灵石不足")
 	}
 
 	// 执行交易（简化处理）
@@ -761,6 +880,8 @@ func (s *OperationService) executeTrade(ctx context.Context, entity *types.Entit
 
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 	s.entityRepo.UpdateAttributes(ctx, target.ID, targetAttr)
+
+	s.modifyKarma(ctx, entity.ID, 2, "交易")
 
 	return &types.OperationResult{
 		Success: true,
@@ -776,12 +897,12 @@ func (s *OperationService) executeTrade(ctx context.Context, entity *types.Entit
 func (s *OperationService) executeFormSect(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	sectName, ok := op.Params["sect_name"].(string)
 	if !ok || sectName == "" {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "sect_name is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少宗门名称")
 	}
 
 	// 验证境界
 	if types.CultivationRealmLevel(entity.Realm) < types.CultivationRealmLevel(types.RealmGoldenCore) {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "requires Golden Core realm or higher")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "需要金丹期或更高境界")
 	}
 
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
@@ -789,7 +910,7 @@ func (s *OperationService) executeFormSect(ctx context.Context, entity *types.En
 	// 检查费用
 	cost := int64(10000)
 	if attr.SpiritStones.LowGrade < cost {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough spirit stones (need 10000)")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵石不足（需要10000）")
 	}
 
 	attr.SpiritStones.LowGrade -= cost
@@ -798,7 +919,7 @@ func (s *OperationService) executeFormSect(ctx context.Context, entity *types.En
 	// 持久化宗门到数据库
 	sectID := string(types.GenerateEntityID())
 	if err := s.sectRepo.Create(ctx, sectID, sectName, string(entity.ID)); err != nil {
-		return nil, errors.NewGameError(errors.ErrInternalError, "failed to create sect")
+		return nil, errors.NewGameError(errors.ErrInternalError, "创建宗门失败")
 	}
 	s.sectRepo.AddMember(ctx, sectID, string(entity.ID), "sect_leader")
 
@@ -817,16 +938,16 @@ func (s *OperationService) executeFormSect(ctx context.Context, entity *types.En
 func (s *OperationService) executeJoinSect(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	sectID, ok := op.Params["sect_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "sect_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少宗门ID")
 	}
 
 	// 验证宗门存在
 	sect, err := s.sectRepo.GetByID(ctx, sectID)
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrInternalError, "failed to query sect")
+		return nil, errors.NewGameError(errors.ErrInternalError, "查询宗门失败")
 	}
 	if sect == nil {
-		return nil, errors.NewGameError(errors.ErrEntityNotFound, "sect not found")
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "宗门不存在")
 	}
 
 	// 检查是否已经加入
@@ -839,7 +960,7 @@ func (s *OperationService) executeJoinSect(ctx context.Context, entity *types.En
 	}
 
 	if err := s.sectRepo.AddMember(ctx, sectID, string(entity.ID), "member"); err != nil {
-		return nil, errors.NewGameError(errors.ErrInternalError, "failed to join sect")
+		return nil, errors.NewGameError(errors.ErrInternalError, "加入宗门失败")
 	}
 
 	return &types.OperationResult{
@@ -856,7 +977,7 @@ func (s *OperationService) executeJoinSect(ctx context.Context, entity *types.En
 func (s *OperationService) executeSendMessage(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	content, ok := op.Params["content"].(string)
 	if !ok || content == "" {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "content is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "请输入内容")
 	}
 
 	msgType, _ := op.Params["message_type"].(string)
@@ -894,24 +1015,24 @@ func (s *OperationService) executeSendMessage(ctx context.Context, entity *types
 func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	spellID, ok := op.Params["spell_id"].(string)
 	if !ok {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "spell_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少法术ID")
 	}
 
 	// 获取法术
 	spell, err := s.spellRepo.GetByID(ctx, types.SpellID(spellID))
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "spell not found")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "法术不存在")
 	}
 
 	// 检查是否已学习
 	entitySpell, err := s.spellRepo.GetEntitySpell(ctx, entity.ID, spell.ID)
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "spell not learned")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "未学习此法术")
 	}
 
 	// 检查冷却
 	if !entitySpell.CanCast(time.Now()) {
-		return nil, errors.NewGameError(errors.ErrCooldownActive, "spell is on cooldown")
+		return nil, errors.NewGameError(errors.ErrCooldownActive, "法术冷却中")
 	}
 
 	// 获取属性
@@ -919,7 +1040,7 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 
 	// 检查灵气
 	if attr.Qi < float64(spell.Cost) {
-		return nil, errors.NewGameError(errors.ErrInsufficientResources, "not enough qi")
+		return nil, errors.NewGameError(errors.ErrInsufficientResources, "灵力不足")
 	}
 
 	attr.Qi -= float64(spell.Cost)
@@ -930,6 +1051,8 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 	// 更新冷却时间
 	s.spellRepo.UpdateSpellCastTime(ctx, entity.ID, spell.ID)
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+
+	s.modifyKarma(ctx, entity.ID, -1, "施法")
 
 	return &types.OperationResult{
 		Success: true,
@@ -944,11 +1067,33 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 // 离开宗门
 func (s *OperationService) executeLeaveSect(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	if s.sectRepo == nil {
-		return nil, errors.NewGameError(errors.ErrInvalidOperation, "sect system not available")
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "宗门系统不可用")
 	}
+
+	sectID, ok := op.Params["sect_id"].(string)
+	if !ok || sectID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少宗门ID")
+	}
+
+	// Verify the entity is a member
+	existing, err := s.sectRepo.GetMember(ctx, sectID, string(entity.ID))
+	if err != nil || !existing {
+		return &types.OperationResult{
+			Success: false,
+			Message: "您不在此宗门中",
+		}, nil
+	}
+
+	if err := s.sectRepo.RemoveMember(ctx, sectID, string(entity.ID)); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "退出宗门失败")
+	}
+
 	return &types.OperationResult{
-		Success: false,
-		Message: "功能开发中",
+		Success: true,
+		Message: "成功退出宗门",
+		Effects: map[string]interface{}{
+			"sect_id": sectID,
+		},
 	}, nil
 }
 
@@ -956,14 +1101,14 @@ func (s *OperationService) executeLeaveSect(ctx context.Context, entity *types.E
 func (s *OperationService) executeAddFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	name, ok := op.Params["name"].(string)
 	if !ok || name == "" {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "name is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "请输入名称")
 	}
 	target, err := s.entityRepo.GetByName(ctx, name)
 	if err != nil {
-		return nil, errors.NewGameError(errors.ErrEntityNotFound, "player not found")
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "玩家不存在")
 	}
 	if target == nil {
-		return nil, errors.NewGameError(errors.ErrEntityNotFound, "player not found")
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "玩家不存在")
 	}
 	if target.ID == entity.ID {
 		return &types.OperationResult{
@@ -971,6 +1116,43 @@ func (s *OperationService) executeAddFriend(ctx context.Context, entity *types.E
 			Message: "不能添加自己为好友",
 		}, nil
 	}
+
+	// Check if already friends
+	if s.friendRepo != nil {
+		areFriends, _ := s.friendRepo.AreFriends(ctx, string(entity.ID), string(target.ID))
+		if areFriends {
+			return &types.OperationResult{
+				Success: false,
+				Message: "已经是好友了",
+			}, nil
+		}
+
+		// Check for existing pending request
+		existingReq, _ := s.friendRepo.GetPendingRequest(ctx, string(entity.ID), string(target.ID))
+		if existingReq != nil {
+			return &types.OperationResult{
+				Success: false,
+				Message: "已经发送过好友请求了",
+			}, nil
+		}
+
+		// Create friend request
+		requestID, err := s.friendRepo.CreateRequest(ctx, string(entity.ID), string(target.ID))
+		if err != nil {
+			return nil, errors.NewGameError(errors.ErrInternalError, "创建好友请求失败")
+		}
+
+		return &types.OperationResult{
+			Success: true,
+			Message: fmt.Sprintf("已向 %s 发送好友请求", name),
+			Effects: map[string]interface{}{
+				"target_id":   string(target.ID),
+				"target_name": target.Name,
+				"request_id":  requestID,
+			},
+		}, nil
+	}
+
 	return &types.OperationResult{
 		Success: true,
 		Message: fmt.Sprintf("已向 %s 发送好友请求", name),
@@ -985,8 +1167,14 @@ func (s *OperationService) executeAddFriend(ctx context.Context, entity *types.E
 func (s *OperationService) executeRemoveFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	friendID, ok := op.Params["friend_id"].(string)
 	if !ok || friendID == "" {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "friend_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少好友ID")
 	}
+
+	if s.friendRepo != nil {
+		s.friendRepo.RemoveFriend(ctx, string(entity.ID), friendID)
+		s.friendRepo.RemoveFriend(ctx, friendID, string(entity.ID))
+	}
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "好友已删除",
@@ -1000,8 +1188,40 @@ func (s *OperationService) executeRemoveFriend(ctx context.Context, entity *type
 func (s *OperationService) executeAcceptFriend(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	requestID, ok := op.Params["request_id"].(string)
 	if !ok || requestID == "" {
-		return nil, errors.NewGameError(errors.ErrInvalidParams, "request_id is required")
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少请求ID")
 	}
+
+	if s.friendRepo != nil {
+		// Get request details
+		fr, err := s.friendRepo.GetRequestByID(ctx, requestID)
+		if err != nil {
+			return nil, errors.NewGameError(errors.ErrInternalError, "查询好友请求失败")
+		}
+		if fr == nil {
+			return &types.OperationResult{
+				Success: false,
+				Message: "好友请求不存在",
+			}, nil
+		}
+
+		// Verify it's for this entity
+		if fr.ToID != string(entity.ID) {
+			return &types.OperationResult{
+				Success: false,
+				Message: "这不是发给您的好友请求",
+			}, nil
+		}
+
+		// Accept the request
+		if err := s.friendRepo.AcceptRequest(ctx, requestID); err != nil {
+			return nil, errors.NewGameError(errors.ErrInternalError, "接受好友请求失败")
+		}
+
+		// Create bidirectional friendship
+		s.friendRepo.AddFriend(ctx, fr.FromID, fr.ToID)
+		s.friendRepo.AddFriend(ctx, fr.ToID, fr.FromID)
+	}
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "好友请求已接受",
@@ -1022,6 +1242,7 @@ func (s *OperationService) executeFlee(ctx context.Context, entity *types.Entity
 	entity.Status = types.StatusNormal
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
+	s.modifyKarma(ctx, entity.ID, 1, "逃离战斗")
 	return &types.OperationResult{
 		Success: true,
 		Message: "成功逃离战斗！",
@@ -1040,6 +1261,7 @@ func (s *OperationService) executeUseSkill(ctx context.Context, entity *types.En
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
 	skillDamage := 10 + float64(attr.AttackPower)*1.2
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+	s.modifyKarma(ctx, entity.ID, -1, "使用技能")
 	return &types.OperationResult{
 		Success: true,
 		Message: "使用技能攻击！",
@@ -1047,6 +1269,335 @@ func (s *OperationService) executeUseSkill(ctx context.Context, entity *types.En
 			"damage": skillDamage,
 		},
 	}, nil
+}
+
+func (s *OperationService) executeUseItem(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	itemName, ok := op.Params["item_name"].(string)
+	if !ok || itemName == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定物品名")
+	}
+
+	item, err := s.itemRepo.GetByName(ctx, itemName)
+	if err != nil || item == nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "找不到该物品: " + itemName,
+		}, nil
+	}
+
+	invItem, err := s.inventoryRepo.GetItem(ctx, entity.ID, item.ID)
+	if err != nil || invItem == nil || invItem.Quantity <= 0 {
+		return &types.OperationResult{
+			Success: false,
+			Message: "背包中没有该物品",
+		}, nil
+	}
+
+	if !item.Usable {
+		return &types.OperationResult{
+			Success: false,
+			Message: "该物品无法使用",
+		}, nil
+	}
+
+	if item.RealmRequirement != "" && types.CultivationRealmLevel(entity.Realm) < types.CultivationRealmLevel(item.RealmRequirement) {
+		return &types.OperationResult{
+			Success: false,
+			Message: "境界不足，无法使用该物品",
+		}, nil
+	}
+
+	// Use the item: heal effects from attributes
+	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
+	effects := map[string]interface{}{
+		"item_name":  item.Name,
+	}
+
+	if item.Attributes != nil {
+		if qi, ok := item.Attributes["qi"]; ok {
+			if v, ok := qi.(float64); ok {
+				attr.Qi += v
+				if attr.Qi > attr.MaxQi {
+					attr.Qi = attr.MaxQi
+				}
+				effects["qi_recovery"] = v
+			}
+		}
+		if sp, ok := item.Attributes["spiritual_power"]; ok {
+			if v, ok := sp.(float64); ok {
+				attr.SpiritualPower += v
+				if attr.SpiritualPower > attr.MaxSpiritualPower {
+					attr.SpiritualPower = attr.MaxSpiritualPower
+				}
+				effects["spiritual_recovery"] = v
+			}
+		}
+	}
+
+	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+	s.inventoryRepo.RemoveItem(ctx, entity.ID, item.ID, 1)
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("使用 %s 成功", item.Name),
+		Effects: effects,
+	}, nil
+}
+
+func (s *OperationService) executeDropItem(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	itemID, ok := op.Params["item_id"].(string)
+	if !ok || itemID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定物品ID")
+	}
+
+	invItem, err := s.inventoryRepo.GetItem(ctx, entity.ID, types.ItemID(itemID))
+	if err != nil || invItem == nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "背包中没有该物品",
+		}, nil
+	}
+
+	s.inventoryRepo.RemoveItem(ctx, entity.ID, types.ItemID(itemID), 1)
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("丢弃 %s 成功", itemID),
+		Effects: map[string]interface{}{
+			"item_id": itemID,
+		},
+	}, nil
+}
+
+// 装备物品
+func (s *OperationService) executeEquipItem(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	itemID, ok := op.Params["item_id"].(string)
+	if !ok || itemID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定物品ID")
+	}
+
+	slot, _ := op.Params["slot"].(string)
+
+	invItem, err := s.inventoryRepo.GetItem(ctx, entity.ID, types.ItemID(itemID))
+	if err != nil || invItem == nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "背包中没有该物品",
+		}, nil
+	}
+
+	if invItem.Equipped {
+		return &types.OperationResult{
+			Success: false,
+			Message: "该物品已装备",
+		}, nil
+	}
+
+	if slot == "" {
+		slot = itemTypeToSlot(string(invItem.Item.Type))
+		if slot == "" {
+			return &types.OperationResult{
+				Success: false,
+				Message: "无法确定装备位，请手动指定（weapon/armor/helmet/boots/necklace/ring）",
+			}, nil
+		}
+	}
+
+	if err := s.inventoryRepo.EquipItem(ctx, entity.ID, types.ItemID(itemID), slot); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "装备失败")
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("已装备 %s 到 %s 位", invItem.Item.Name, slot),
+		Effects: map[string]interface{}{
+			"item_name": invItem.Item.Name,
+			"slot":      slot,
+		},
+	}, nil
+}
+
+// 卸下装备
+func (s *OperationService) executeUnequipItem(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	slot, ok := op.Params["slot"].(string)
+	if !ok || slot == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定装备位")
+	}
+
+	if err := s.inventoryRepo.UnequipItem(ctx, entity.ID, slot); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "卸下装备失败")
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("已卸下 %s 位的装备", slot),
+		Effects: map[string]interface{}{
+			"slot": slot,
+		},
+	}, nil
+}
+
+// 学习法术
+func (s *OperationService) executeLearnSpell(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	spellID, ok := op.Params["spell_id"].(string)
+	if !ok || spellID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定法术ID")
+	}
+
+	spell, err := s.spellRepo.GetByID(ctx, types.SpellID(spellID))
+	if err != nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "法术不存在",
+		}, nil
+	}
+
+	if spell.RealmRequirement != "" && types.CultivationRealmLevel(entity.Realm) < types.CultivationRealmLevel(spell.RealmRequirement) {
+		return &types.OperationResult{
+			Success: false,
+			Message: fmt.Sprintf("境界不足，需要 %s", string(spell.RealmRequirement)),
+		}, nil
+	}
+
+	existing, err := s.spellRepo.GetEntitySpell(ctx, entity.ID, types.SpellID(spellID))
+	if err == nil && existing != nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "已学习该法术",
+		}, nil
+	}
+
+	if err := s.spellRepo.LearnSpell(ctx, entity.ID, types.SpellID(spellID)); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "学习法术失败")
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("成功学习法术：%s", spell.Name),
+		Effects: map[string]interface{}{
+			"spell_id":   spellID,
+			"spell_name": spell.Name,
+		},
+	}, nil
+}
+
+// 好友列表
+func (s *OperationService) executeListFriends(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	if s.friendRepo == nil {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "好友系统不可用")
+	}
+
+	friends, err := s.friendRepo.GetFriends(ctx, string(entity.ID))
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "查询好友列表失败")
+	}
+
+	friendList := make([]map[string]interface{}, 0, len(friends))
+	for _, f := range friends {
+		friendEntity, err := s.entityRepo.GetByID(ctx, types.EntityID(f.FriendID))
+		name := f.FriendID
+		if err == nil && friendEntity != nil {
+			name = friendEntity.Name
+		}
+		friendList = append(friendList, map[string]interface{}{
+			"friend_id":   f.FriendID,
+			"friend_name": name,
+			"created_at":  f.CreatedAt,
+		})
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("共有 %d 位好友", len(friendList)),
+		Effects: map[string]interface{}{
+			"friends": friendList,
+			"count":   len(friendList),
+		},
+	}, nil
+}
+
+// 宗门信息
+func (s *OperationService) executeSectInfo(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	sectID, ok := op.Params["sect_id"].(string)
+	if !ok || sectID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "请指定宗门ID")
+	}
+
+	sect, err := s.sectRepo.GetByID(ctx, sectID)
+	if err != nil || sect == nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "宗门不存在",
+		}, nil
+	}
+
+	founderName := sect.FounderID
+	if founderEntity, err := s.entityRepo.GetByID(ctx, types.EntityID(sect.FounderID)); err == nil {
+		founderName = founderEntity.Name
+	}
+
+	members, _ := s.sectRepo.ListMembers(ctx, sectID)
+	memberList := make([]map[string]interface{}, 0, len(members))
+	for _, m := range members {
+		memberList = append(memberList, map[string]interface{}{
+			"entity_id":    m.EntityID,
+			"name":         m.Name,
+			"rank":         m.Rank,
+			"contribution": m.Contribution,
+			"joined_at":    m.JoinedAt,
+		})
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("宗门：%s", sect.Name),
+		Effects: map[string]interface{}{
+			"sect_id":      sect.ID,
+			"sect_name":    sect.Name,
+			"founder_id":   sect.FounderID,
+			"founder_name": founderName,
+			"alignment":    sect.Alignment,
+			"members":      memberList,
+			"member_count": len(memberList),
+		},
+	}, nil
+}
+
+func itemTypeToSlot(itemType string) string {
+	switch itemType {
+	case "weapon":
+		return "weapon"
+	case "armor":
+		return "armor"
+	case "helmet":
+		return "helmet"
+	case "boots":
+		return "boots"
+	case "necklace":
+		return "necklace"
+	case "ring":
+		return "ring1"
+	}
+	return ""
+}
+// ensureItemInInventory ensures a named material item exists in the DB and adds it to entity's inventory
+func (s *OperationService) ensureItemInInventory(ctx context.Context, entityID types.EntityID, name string, itemType types.ItemType, rarity int) {
+	item, err := s.itemRepo.GetByName(ctx, name)
+	if err != nil || item == nil {
+		item = &types.Item{
+			ID:          types.ItemID(types.GenerateEntityID()),
+			Name:        name,
+			Type:        itemType,
+			Rarity:      rarity,
+			Description: "采集获得的材料",
+			Attributes:  map[string]interface{}{},
+			Stackable:   true,
+			MaxStack:    99,
+			Usable:      false,
+		}
+		s.itemRepo.Create(ctx, item)
+	}
+	s.inventoryRepo.AddItem(ctx, entityID, item.ID, 1)
 }
 
 func getNextRealm(current types.CultivationRealm) types.CultivationRealm {
@@ -1082,5 +1633,8 @@ func getRealmLifespan(realm types.CultivationRealm) int {
 }
 
 func generateMessageID() string {
-	return fmt.Sprintf("msg_%d", time.Now().UnixNano())
+	id := string(types.GenerateEntityID())
+	// Format as UUID: 8-4-4-4-12
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		id[0:8], id[8:12], id[12:16], id[16:20], id[20:32])
 }

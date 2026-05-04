@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	pb "github.com/cultivation-world/shared/proto/pb"
 	"google.golang.org/grpc"
@@ -29,6 +30,8 @@ func NewHeavenlyDaoGrpcClient(cc grpc.ClientConnInterface) HeavenlyDaoClient {
 }
 
 func (h *heavenlyDaoGrpcClient) CheckTribulation(ctx context.Context, entityID string, targetRealm string) (*TribulationResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	resp, err := h.client.CheckTribulation(ctx, &pb.TribulationRequest{
 		EntityId:    entityID,
 		TargetRealm: targetRealm,

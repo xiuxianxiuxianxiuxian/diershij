@@ -18,6 +18,8 @@ func NewWorldGrpcClient(cc grpc.ClientConnInterface) WorldServiceClient {
 }
 
 func (w *worldGrpcClient) GetRegion(ctx context.Context, regionID string) (*types.Region, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	resp, err := w.client.GetRegion(ctx, &pb.RegionRequest{RegionId: regionID})
 	if err != nil {
 		return nil, err

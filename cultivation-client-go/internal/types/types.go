@@ -2,7 +2,33 @@ package types
 
 import "time"
 
-// 实体（用户/角色）
+// ===== API 响应类型（与服务端匹配） =====
+
+// ServerEntity 服务端返回的完整实体
+type ServerEntity struct {
+	ID         string                 `json:"id"`
+	EntityType string                 `json:"entity_type"`
+	Name       string                 `json:"name"`
+	Realm      string                 `json:"realm"`
+	Position   map[string]interface{} `json:"position,omitempty"`
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+	Karma      map[string]interface{} `json:"karma,omitempty"`
+	Status     string                 `json:"status,omitempty"`
+	CreatedAt  string                 `json:"created_at,omitempty"`
+	UpdatedAt  string                 `json:"updated_at,omitempty"`
+}
+
+// AuthResponse 登录/注册统一响应
+type AuthResponse struct {
+	Success bool          `json:"success"`
+	Token   string        `json:"token"`
+	Entity  *ServerEntity `json:"entity"`
+	Error   string        `json:"error,omitempty"`
+}
+
+// ===== 客户端本地实体类型 =====
+
+// Entity 简化的用户/角色信息
 type Entity struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
@@ -10,46 +36,7 @@ type Entity struct {
 	EntityType string `json:"entity_type"`
 }
 
-// 登录请求
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// 登录响应
-type LoginResponse struct {
-	Success bool   `json:"success"`
-	Token   string `json:"token"`
-	Entity  Entity `json:"entity"`
-	Message string `json:"message,omitempty"`
-}
-
-// 注册请求
-type RegisterRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// 注册响应
-type RegisterResponse struct {
-	Success bool   `json:"success"`
-	Token   string `json:"token"`
-	Entity  Entity `json:"entity"`
-	Message string `json:"message,omitempty"`
-}
-
-// 用户
-type User struct {
-	ID               string    `json:"id"`
-	Username         string    `json:"username"`
-	Email            string    `json:"email,omitempty"`
-	Level            int       `json:"level"`
-	Exp              int       `json:"exp"`
-	CultivationLevel string    `json:"cultivation_level,omitempty"`
-	CreatedAt        time.Time `json:"created_at,omitempty"`
-}
-
-// 角色
+// Character 角色属性（客户端 UI 用）
 type Character struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
@@ -62,9 +49,87 @@ type Character struct {
 	Defense          int    `json:"defense"`
 	Speed            int    `json:"speed"`
 	CultivationRealm string `json:"cultivation_realm,omitempty"`
+	CultivationProgress float64 `json:"cultivation_progress"`
+	Qi               float64 `json:"qi"`
+	MaxQi            float64 `json:"max_qi"`
+	SpiritualPower   float64 `json:"spiritual_power"`
+	MaxSpiritualPower float64 `json:"max_spiritual_power"`
+
+	// 修炼资质
+	Comprehension    int     `json:"comprehension"`
+	Constitution     int     `json:"constitution"`
+	Luck             int     `json:"luck"`
+	DivineSense      float64 `json:"divine_sense"`
+
+	// 心境 / 寿元
+	MentalStability     int `json:"mental_stability"`
+	RemainingLifespan   int `json:"remaining_lifespan"`
+	MaxLifespan         int `json:"max_lifespan"`
+
+	// 位置
+	RegionID  string  `json:"region_id"`
+	PositionX float64 `json:"position_x"`
+	PositionY float64 `json:"position_y"`
+
+	// 状态
+	Status string `json:"status"`
+
+	// 业力
+	KarmaValue   int    `json:"karma_value"`
+	Merit        int    `json:"merit"`
+	KarmicDebt   int    `json:"karmic_debt"`
+	HeavenlyMark string `json:"heavenly_mark"`
+
+	// 战斗属性
+	CritRate        float64 `json:"crit_rate"`
+	CritDamage      float64 `json:"crit_damage"`
+	DodgeRate       float64 `json:"dodge_rate"`
+	HitRate         float64 `json:"hit_rate"`
+	Penetration     float64 `json:"penetration"`
+	DamageReduction float64 `json:"damage_reduction"`
+
+	// 生活技能
+	AlchemyLevel    int `json:"alchemy_level"`
+	ArtificingLevel int `json:"artificing_level"`
+	FormationLevel  int `json:"formation_level"`
+	FireControl     int `json:"fire_control"`
+	HerbKnowledge   int `json:"herb_knowledge"`
+	MiningSkill     int `json:"mining_skill"`
+	TalismanSkill   int `json:"talisman_skill"`
+	BeastTaming     int `json:"beast_taming"`
+
+	// 社交
+	Reputation       int `json:"reputation"`
+	SectContribution int `json:"sect_contribution"`
+
+	// 心境 / 灵性
+	DaoHeart      int `json:"dao_heart"`
+	Enlightenment int `json:"enlightenment"`
+	RootPurity    int `json:"root_purity"`
+	PoisonLevel   int `json:"poison_level"`
+	CurseLevel    int `json:"curse_level"`
+
+	// 灵石
+	LowGradeStones     int64 `json:"low_grade_stones"`
+	MediumGradeStones  int64 `json:"medium_grade_stones"`
+	HighGradeStones    int64 `json:"high_grade_stones"`
+	PremiumGradeStones int64 `json:"premium_grade_stones"`
 }
 
-// 世界状态
+// ===== 请求类型 =====
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type RegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// ===== 世界 / 战斗 / 社交 =====
+
 type WorldState struct {
 	CurrentMap    string         `json:"current_map"`
 	PlayersOnline int            `json:"players_online"`
@@ -72,7 +137,6 @@ type WorldState struct {
 	Announcements []Announcement `json:"announcements,omitempty"`
 }
 
-// 世界事件
 type WorldEvent struct {
 	ID          string    `json:"id"`
 	Type        string    `json:"type"`
@@ -81,14 +145,12 @@ type WorldEvent struct {
 	EndTime     time.Time `json:"end_time"`
 }
 
-// 公告
 type Announcement struct {
 	ID       string `json:"id"`
 	Content  string `json:"content"`
 	Priority int    `json:"priority"`
 }
 
-// 战斗状态
 type CombatState struct {
 	InCombat     bool        `json:"in_combat"`
 	CurrentEnemy *Enemy      `json:"current_enemy,omitempty"`
@@ -96,7 +158,6 @@ type CombatState struct {
 	TurnNumber   int         `json:"turn_number"`
 }
 
-// 敌人
 type Enemy struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
@@ -108,14 +169,12 @@ type Enemy struct {
 	Skills    []Skill `json:"skills,omitempty"`
 }
 
-// 战斗日志
 type CombatLog struct {
 	Timestamp time.Time `json:"timestamp"`
 	Message   string    `json:"message"`
 	Type      string    `json:"type"`
 }
 
-// 技能
 type Skill struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -124,7 +183,6 @@ type Skill struct {
 	Description string `json:"description"`
 }
 
-// 社交信息
 type SocialInfo struct {
 	Friends  []Friend        `json:"friends,omitempty"`
 	Guild    *Guild          `json:"guild,omitempty"`
@@ -132,7 +190,6 @@ type SocialInfo struct {
 	Requests []FriendRequest `json:"friend_requests,omitempty"`
 }
 
-// 好友
 type Friend struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
@@ -141,7 +198,6 @@ type Friend struct {
 	LastSeen time.Time `json:"last_seen"`
 }
 
-// 门派/公会
 type Guild struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -150,7 +206,6 @@ type Guild struct {
 	Leader  string `json:"leader"`
 }
 
-// 消息
 type Message struct {
 	ID         string    `json:"id"`
 	SenderID   string    `json:"sender_id"`
@@ -160,7 +215,6 @@ type Message struct {
 	Read       bool      `json:"read"`
 }
 
-// 好友请求
 type FriendRequest struct {
 	ID        string    `json:"id"`
 	FromID    string    `json:"from_id"`
@@ -168,7 +222,6 @@ type FriendRequest struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// 设置
 type Settings struct {
 	AudioVolume       float64 `json:"audio_volume"`
 	MusicVolume       float64 `json:"music_volume"`
@@ -178,11 +231,10 @@ type Settings struct {
 	Language          string  `json:"language"`
 }
 
-// 应用状态
 type AppState struct {
 	CurrentWindow string
 	IsLoggedIn    bool
-	User          *User
+	User          *Entity
 	Character     *Character
 	World         *WorldState
 	Combat        *CombatState
@@ -190,7 +242,8 @@ type AppState struct {
 	Settings      *Settings
 }
 
-// WebSocket 消息类型
+// ===== WebSocket =====
+
 type WSMessageType string
 
 const (
@@ -203,10 +256,10 @@ const (
 	WSMessageTypeOpResult     WSMessageType = "op_result"
 )
 
-// WebSocket 消息
 type WSMessage struct {
-	Type    WSMessageType          `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
+	Type      WSMessageType          `json:"type"`
+	Payload   map[string]interface{} `json:"payload"`
+	Timestamp int64                  `json:"timestamp,omitempty"`
 }
 
 // OperationResult 操作结果
@@ -215,5 +268,5 @@ type OperationResult struct {
 	Message   string                 `json:"message"`
 	Effects   map[string]interface{} `json:"effects,omitempty"`
 	Timestamp int64                  `json:"timestamp,omitempty"`
-	ErrorCode int                    `json:"error_code,omitempty"`
+	RequestID string                 `json:"request_id,omitempty"`
 }
