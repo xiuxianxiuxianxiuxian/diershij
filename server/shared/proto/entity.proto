@@ -26,6 +26,35 @@ message WorldPosition {
     double y = 3;
 }
 
+message SpiritualRoot {
+    string element = 1;
+    int32 purity = 2;
+}
+
+message Injury {
+    string type = 1;
+    int32 severity = 2;
+    string cause = 3;
+    int64 heal_time = 4;
+    string description = 5;
+}
+
+message Buff {
+    string name = 1;
+    string effect = 2;
+    double value = 3;
+    string source = 4;
+    int64 expiry_time = 5;
+}
+
+message Debuff {
+    string name = 1;
+    string effect = 2;
+    double value = 3;
+    string source = 4;
+    int64 expiry_time = 5;
+}
+
 message Attributes {
     double qi = 1;
     double max_qi = 2;
@@ -67,6 +96,22 @@ message Attributes {
     int32 root_purity = 34;
     int32 poison_level = 35;
     int32 curse_level = 36;
+    // New fields for complete character system
+    int32 age = 37;
+    string gender = 38;
+    int32 appearance = 39;
+    int32 charisma = 40;
+    int32 obsession_count = 41;
+    int32 inner_demon_resistance = 42;
+    double aging_penalty = 43;
+    int32 property_value = 44;
+    int32 business_income = 45;
+    repeated SpiritualRoot spiritual_roots = 46;
+    bool root_awakened = 47;
+    string mutated_root = 48;
+    repeated Injury injuries = 49;
+    repeated Buff buffs = 50;
+    repeated Debuff debuffs = 51;
 }
 
 message Karma {
@@ -111,4 +156,5 @@ message ItemData {
     string slot = 9;
     int32 durability = 10;
     bool bound = 11;
+    string attributes_json = 12;
 }

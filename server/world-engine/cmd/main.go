@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"github.com/cultivation-world/world-engine/internal/service"
 	cultivation "github.com/cultivation-world/shared/proto/pb"
@@ -13,6 +14,16 @@ import (
 
 func main() {
 	worldSvc := service.NewWorldEngineService()
+
+	// 后台资源刷新协程：每5分钟刷新一次资源
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			log.Println("World Engine: 开始刷新资源...")
+			worldSvc.AdvanceEpoch()
+		}
+	}()
 
 	grpcServer := grpc.NewServer()
 	cultivation.RegisterWorldServiceServer(grpcServer, worldSvc)

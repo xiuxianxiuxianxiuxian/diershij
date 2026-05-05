@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "net/http"
+    "strings"
     "time"
 
     "github.com/cultivation-world/gateway/internal/service"
@@ -87,7 +88,11 @@ func (s *Server) handleRegister(c *gin.Context) {
 
     entity, token, err := s.authSvc.Register(req.Username, req.Password)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        if strings.Contains(err.Error(), "already exists") {
+            c.JSON(http.StatusConflict, gin.H{"error": "用户名已存在"})
+        } else {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "注册失败，请稍后重试"})
+        }
         return
     }
 

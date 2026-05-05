@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/cultivation-world/shared/errors"
@@ -22,6 +23,7 @@ type OperationService struct {
 	sectRepo      SectRepository
 	recipeRepo    RecipeRepository
 	friendRepo    FriendRepository
+	methodRepo    MethodRepository
 }
 
 type EntityRepository interface {
@@ -34,6 +36,8 @@ type EntityRepository interface {
 	UpdateKarma(ctx context.Context, entityID types.EntityID, karma *types.Karma) error
 	SetPasswordHash(ctx context.Context, entityID types.EntityID, hash string) error
 	GetPasswordHash(ctx context.Context, entityID types.EntityID) (string, error)
+	UpdateSpiritualRoots(ctx context.Context, entityID types.EntityID, roots []types.SpiritualRoot) error
+	GetSpiritualRoots(ctx context.Context, entityID types.EntityID) ([]types.SpiritualRoot, error)
 }
 
 type ItemRepository interface {
@@ -50,6 +54,7 @@ type InventoryRepository interface {
 	AddItem(ctx context.Context, entityID types.EntityID, itemID types.ItemID, quantity int) error
 	RemoveItem(ctx context.Context, entityID types.EntityID, itemID types.ItemID, quantity int) error
 	EquipItem(ctx context.Context, entityID types.EntityID, itemID types.ItemID, slot string) error
+	UpdateDurability(ctx context.Context, entityID types.EntityID, itemID types.ItemID, durability int) error
 }
 
 type SpellRepository interface {
@@ -127,6 +132,36 @@ type FriendInfo struct {
 	ToID      string
 }
 
+// ── 功法系统 ──
+
+type MethodInfo struct {
+	ID                    string
+	Name                  string
+	Quality               string
+	RealmRequirement      string
+	ElementAffinity       string
+	CultivationMultiplier float64
+	BreakthroughBonus     float64
+	Description           string
+}
+
+type EntityMethodInfo struct {
+	MethodID     string
+	Method       *MethodInfo
+	MasteryLevel float64
+	IsMainMethod bool
+	LearnedAt    int64
+}
+
+type MethodRepository interface {
+	GetByID(ctx context.Context, id string) (*MethodInfo, error)
+	GetByRealm(ctx context.Context, realm string) ([]*MethodInfo, error)
+	GetEntityMethods(ctx context.Context, entityID types.EntityID) ([]*EntityMethodInfo, error)
+	LearnMethod(ctx context.Context, entityID types.EntityID, methodID string) error
+	SetMainMethod(ctx context.Context, entityID types.EntityID, methodID string) error
+	GetMainMethod(ctx context.Context, entityID types.EntityID) (*EntityMethodInfo, error)
+}
+
 type FriendRequestInfo struct {
 	ID     string
 	FromID string
@@ -145,6 +180,7 @@ func NewOperationService(
 	sectRepo SectRepository,
 	recipeRepo RecipeRepository,
 	friendRepo FriendRepository,
+	methodRepo MethodRepository,
 ) *OperationService {
 	return &OperationService{
 		entityRepo:    entityRepo,
@@ -157,6 +193,7 @@ func NewOperationService(
 		sectRepo:      sectRepo,
 		recipeRepo:    recipeRepo,
 		friendRepo:    friendRepo,
+		methodRepo:    methodRepo,
 	}
 }
 
@@ -227,6 +264,12 @@ func (s *OperationService) Execute(ctx context.Context, op *types.Operation) (*t
 		return s.executeListFriends(ctx, entity, op)
 	case types.ActionSectInfo:
 		return s.executeSectInfo(ctx, entity, op)
+	case types.ActionLearnMethod:
+		return s.executeLearnMethod(ctx, entity, op)
+	case types.ActionSetMainMethod:
+		return s.executeSetMainMethod(ctx, entity, op)
+	case types.ActionListMethods:
+		return s.executeListMethods(ctx, entity, op)
 	default:
 		return nil, errors.ErrInvalidOperationType
 	}
@@ -242,7 +285,7 @@ func (s *OperationService) modifyKarma(ctx context.Context, entityID types.Entit
 	s.entityRepo.UpdateKarma(ctx, entityID, &entity.Karma)
 }
 
-// 修炼
+// 修炼（使用 heavenly-dao 效率计算）
 func (s *OperationService) executeCultivate(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	attr, err := s.entityRepo.GetAttributes(ctx, entity.ID)
 	if err != nil {
@@ -250,7 +293,30 @@ func (s *OperationService) executeCultivate(ctx context.Context, entity *types.E
 	}
 
 	cultivationGain := 0.1 * float64(attr.Comprehension) / 100.0
-	attr.CultivationProgress += cultivationGain
+
+	// 尝试调用 heavenly-dao 获取修炼效率
+	if s.daoService != nil {
+		daoInput := &CultivateEfficiencyInput{
+			EntityID:        string(entity.ID),
+			Realm:           entity.Realm,
+			SpiritualRoots:  attr.SpiritualRoots,
+			SpiritualDensity: 0.5,
+			Comprehension:   attr.Comprehension,
+			MentalStability: attr.MentalStability,
+			BaseLifespan:    attr.MaxLifespan,
+			CurrentAge:      attr.Age,
+		}
+		daoResult, err := s.daoService.ExecuteCultivate(ctx, daoInput)
+		if err == nil && daoResult != nil && daoResult.Success {
+			cultivationGain = daoResult.CultivationGained
+			attr.CultivationProgress += cultivationGain
+		} else {
+			// heavenly-dao 不可用时使用简化计算
+			attr.CultivationProgress += cultivationGain
+		}
+	} else {
+		attr.CultivationProgress += cultivationGain
+	}
 
 	if attr.CultivationProgress > 100 {
 		attr.CultivationProgress = 100
@@ -381,8 +447,7 @@ func (s *OperationService) executeSleep(ctx context.Context, entity *types.Entit
 	}, nil
 }
 
-// 休息
-// 突破
+// 突破（使用 heavenly-dao 完整突破系统）
 func (s *OperationService) executeBreakthrough(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	attr, err := s.entityRepo.GetAttributes(ctx, entity.ID)
 	if err != nil {
@@ -404,32 +469,118 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 		}, nil
 	}
 
-	// 天道劫数检查
-	if s.daoService != nil {
-		tribResult, err := s.daoService.CheckTribulation(ctx, string(entity.ID), string(newRealm))
-		if err == nil && !tribResult.Success {
-			return &types.OperationResult{
-				Success: false,
-				Message: "突破失败：" + tribResult.Reason,
-				Effects: map[string]interface{}{
-					"tribulation": true,
-					"severity":    tribResult.Severity,
-				},
-			}, nil
+	// 查询主修功法品质
+	methodQuality := 50.0
+	if s.methodRepo != nil {
+		mainMethod, err := s.methodRepo.GetMainMethod(ctx, entity.ID)
+		if err == nil && mainMethod != nil && mainMethod.Method != nil {
+			switch mainMethod.Method.Quality {
+			case "天级":
+				methodQuality = 90
+			case "地级":
+				methodQuality = 75
+			case "玄级":
+				methodQuality = 60
+			default:
+				methodQuality = 45
+			}
+			// 突破加成
+			methodQuality += mainMethod.Method.BreakthroughBonus * 100
 		}
 	}
 
+	// 使用 heavenly-dao 完整突破系统
+	if s.daoService != nil {
+		daoInput := &BreakthroughInput{
+			EntityID:        string(entity.ID),
+			CurrentRealm:    entity.Realm,
+			TargetRealm:     newRealm,
+			CultivationTime: attr.CultivationProgress,
+			MethodQuality:   methodQuality,
+			ResourceBonus:   0,
+			MentalStability: attr.MentalStability,
+			Luck:            attr.Luck,
+			Karma:           entity.Karma.KarmaValue,
+			Merit:           entity.Karma.Merit,
+		}
+		daoResult, err := s.daoService.ExecuteBreakthrough(ctx, daoInput)
+		if err != nil {
+			return nil, err
+		}
+
+		if !daoResult.Success {
+			// 应用失败惩罚
+			progressLoss := daoResult.PenaltyProgressLoss
+			if progressLoss <= 0 {
+				progressLoss = 0.1
+			}
+			attr.CultivationProgress *= (1 - progressLoss)
+			attr.MentalStability -= daoResult.PenaltyMentalDamage
+			if attr.MentalStability < 0 {
+				attr.MentalStability = 0
+			}
+
+			s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+
+			return &types.OperationResult{
+				Success: false,
+				Message: daoResult.Message,
+				Effects: map[string]interface{}{
+					"success_rate":       daoResult.SuccessRate,
+					"progress_loss":      progressLoss,
+					"mental_damage":      daoResult.PenaltyMentalDamage,
+					"cooldown_hours":     daoResult.PenaltyCooldownHours,
+				},
+			}, nil
+		}
+
+		// 突破成功 - 处理天劫
+		if daoResult.TribulationTriggered {
+			return &types.OperationResult{
+				Success: false,
+				Message: fmt.Sprintf("天劫降临！强度: %.1f, 类型: %s, 突破失败", daoResult.TribulationStrength, daoResult.TribulationType),
+				Effects: map[string]interface{}{
+					"tribulation":        true,
+					"tribulation_strength": daoResult.TribulationStrength,
+					"tribulation_type":   daoResult.TribulationType,
+				},
+			}, nil
+		}
+
+		// 突破成功 - 应用属性变化
+		entity.Realm = daoResult.NewRealm
+		attr.CultivationProgress = 0
+		attr.MaxQi *= 1.5
+		attr.MaxSpiritualPower *= 1.5
+		attr.MaxLifespan = getRealmLifespan(daoResult.NewRealm)
+
+		s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+		entity.UpdatedAt = time.Now()
+		s.entityRepo.Update(ctx, entity)
+		s.modifyKarma(ctx, entity.ID, 5, "突破成功")
+
+		return &types.OperationResult{
+			Success: true,
+			Message: daoResult.Message,
+			Effects: map[string]interface{}{
+				"new_realm":           daoResult.NewRealm,
+				"success_rate":        daoResult.SuccessRate,
+				"max_qi":              attr.MaxQi,
+				"max_spiritual":       attr.MaxSpiritualPower,
+				"tribulation_triggered": daoResult.TribulationTriggered,
+			},
+		}, nil
+	}
+
+	// fallback: daoService 不可用时的简化突破
 	successRate := 0.5 + float64(attr.Luck)/200.0
 	if successRate > 0.8 {
 		successRate = 0.8
 	}
 
-	// 随机判定突破是否成功
 	if rand.Float64() > successRate {
 		attr.CultivationProgress = 0
-		if err := s.entityRepo.UpdateAttributes(ctx, entity.ID, attr); err != nil {
-			return nil, err
-		}
+		s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 		return &types.OperationResult{
 			Success: false,
 			Message: "突破失败，修为尽失！",
@@ -445,13 +596,9 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 	attr.MaxSpiritualPower *= 1.5
 	attr.MaxLifespan = getRealmLifespan(newRealm)
 
-	if err := s.entityRepo.UpdateAttributes(ctx, entity.ID, attr); err != nil {
-		return nil, err
-	}
-
+	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
-
 	s.modifyKarma(ctx, entity.ID, 5, "突破成功")
 
 	return &types.OperationResult{
@@ -464,6 +611,88 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 			"max_spiritual": attr.MaxSpiritualPower,
 		},
 	}, nil
+}
+
+// EquipmentBonuses 表示装备提供的完整属性加成
+type EquipmentBonuses struct {
+	AttackPower       float64
+	Defense           float64
+	Speed             float64
+	CritRate          float64
+	CritDamage        float64
+	DodgeRate         float64
+	HitRate           float64
+	Penetration       float64
+	DamageReduction   float64
+	MaxQi             float64
+	MaxSpiritualPower float64
+	DivineSense       float64
+	Comprehension     float64
+	Constitution      float64
+	Luck              float64
+}
+
+// 读取装备所有属性加成
+func (s *OperationService) GetEquipmentBonuses(ctx context.Context, entityID types.EntityID) *EquipmentBonuses {
+	bonuses := &EquipmentBonuses{}
+	if s.inventoryRepo == nil {
+		return bonuses
+	}
+	equipped, err := s.inventoryRepo.GetEquippedItems(ctx, entityID)
+	if err != nil || len(equipped) == 0 {
+		return bonuses
+	}
+	for _, invItem := range equipped {
+		if invItem.Item == nil || invItem.Item.Attributes == nil {
+			continue
+		}
+		attrs := invItem.Item.Attributes
+		bonuses.AttackPower += getFloat64FromMap(attrs, "attack_power")
+		bonuses.Defense += getFloat64FromMap(attrs, "defense")
+		bonuses.Speed += getFloat64FromMap(attrs, "speed")
+		bonuses.CritRate += getFloat64FromMap(attrs, "crit_rate")
+		bonuses.CritDamage += getFloat64FromMap(attrs, "crit_damage")
+		bonuses.DodgeRate += getFloat64FromMap(attrs, "dodge_rate")
+		bonuses.HitRate += getFloat64FromMap(attrs, "hit_rate")
+		bonuses.Penetration += getFloat64FromMap(attrs, "penetration")
+		bonuses.DamageReduction += getFloat64FromMap(attrs, "damage_reduction")
+		bonuses.MaxQi += getFloat64FromMap(attrs, "max_qi")
+		bonuses.MaxSpiritualPower += getFloat64FromMap(attrs, "max_spiritual_power")
+		bonuses.DivineSense += getFloat64FromMap(attrs, "divine_sense")
+		bonuses.Comprehension += getFloat64FromMap(attrs, "comprehension")
+		bonuses.Constitution += getFloat64FromMap(attrs, "constitution")
+		bonuses.Luck += getFloat64FromMap(attrs, "luck")
+	}
+	return bonuses
+}
+
+func getFloat64FromMap(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key]; ok {
+		if f, ok2 := v.(float64); ok2 {
+			return f
+		}
+	}
+	return 0
+}
+	// reduceEquipmentDurability 减少装备耐久度，归零自动卸下
+func (s *OperationService) reduceEquipmentDurability(ctx context.Context, entityID types.EntityID) {
+	if s.inventoryRepo == nil {
+		return
+	}
+	equipped, err := s.inventoryRepo.GetEquippedItems(ctx, entityID)
+	if err != nil || len(equipped) == 0 {
+		return
+	}
+	for _, invItem := range equipped {
+		newDur := invItem.Durability - 1
+		if newDur < 0 {
+			newDur = 0
+		}
+		s.inventoryRepo.UpdateDurability(ctx, entityID, invItem.ItemID, newDur)
+		if newDur <= 0 {
+			s.inventoryRepo.UnequipItem(ctx, entityID, invItem.Slot)
+		}
+	}
 }
 
 // 战斗
@@ -492,6 +721,29 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 	// 获取属性
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
 	targetAttr, _ := s.entityRepo.GetAttributes(ctx, target.ID)
+
+	// 应用完整装备属性加成
+	bonuses := s.GetEquipmentBonuses(ctx, entity.ID)
+	tgtBonuses := s.GetEquipmentBonuses(ctx, target.ID)
+
+	attr.AttackPower += bonuses.AttackPower
+	attr.Defense += bonuses.Defense
+	attr.Speed += bonuses.Speed
+	attr.CritRate += bonuses.CritRate
+	attr.CritDamage += bonuses.CritDamage
+	attr.DodgeRate += bonuses.DodgeRate
+	attr.HitRate += bonuses.HitRate
+	attr.Penetration += bonuses.Penetration
+	attr.DamageReduction += bonuses.DamageReduction
+	targetAttr.AttackPower += tgtBonuses.AttackPower
+	targetAttr.Defense += tgtBonuses.Defense
+	targetAttr.Speed += tgtBonuses.Speed
+	targetAttr.CritRate += tgtBonuses.CritRate
+	targetAttr.CritDamage += tgtBonuses.CritDamage
+	targetAttr.DodgeRate += tgtBonuses.DodgeRate
+	targetAttr.HitRate += tgtBonuses.HitRate
+	targetAttr.Penetration += tgtBonuses.Penetration
+	targetAttr.DamageReduction += tgtBonuses.DamageReduction
 
 	// 计算距离
 	distance := math.Sqrt(math.Pow(entity.Position.X-target.Position.X, 2) + math.Pow(entity.Position.Y-target.Position.Y, 2))
@@ -525,8 +777,17 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 	karmaChange := -2
 	if result.Killed {
 		karmaChange = -10
+		// NPC 击杀掉落
+		if target.EntityType == types.EntityTypeNPC {
+			drops := s.handleNPCDrops(ctx, entity.ID, target)
+			result.Message += " " + drops
+			karmaChange = -5
+		}
 	}
 	s.modifyKarma(ctx, entity.ID, karmaChange, "战斗")
+	// 减少装备耐久度
+	s.reduceEquipmentDurability(ctx, entity.ID)
+	s.reduceEquipmentDurability(ctx, target.ID)
 
 	return &types.OperationResult{
 		Success: true,
@@ -577,6 +838,80 @@ func (s *OperationService) calculateCombat(attacker, defender *types.Attributes)
 
 	result.DamageDealt = int(baseDamage)
 	return result
+}
+
+// handleNPCDrops generates loot drops when an NPC is killed.
+func (s *OperationService) handleNPCDrops(ctx context.Context, entityID types.EntityID, npc *types.Entity) string {
+	realmLevel := types.CultivationRealmLevel(npc.Realm)
+	drops := []struct {
+		Name     string
+		ItemType types.ItemType
+		Rarity   int
+		Chance   float64
+	}{
+		// 基础掉落
+		{"妖兽精血", types.ItemTypeMaterial, 1, 0.60},
+		{"妖兽皮毛", types.ItemTypeMaterial, 1, 0.50},
+		{"妖兽骨", types.ItemTypeMaterial, 1, 0.30},
+		{"灵石", types.ItemTypeMaterial, 1, 0.80},
+	}
+
+	// 境界>=3 (金丹) 额外掉落
+	if realmLevel >= 3 {
+		drops = append(drops,
+			struct {
+				Name     string
+				ItemType types.ItemType
+				Rarity   int
+				Chance   float64
+			}{"内丹", types.ItemTypeMaterial, 2, 0.30},
+			struct {
+				Name     string
+				ItemType types.ItemType
+				Rarity   int
+				Chance   float64
+			}{"妖丹", types.ItemTypeMaterial, 3, 0.20},
+		)
+	}
+	// 境界>=4 (元婴) 额外掉落
+	if realmLevel >= 4 {
+		drops = append(drops,
+			struct {
+				Name     string
+				ItemType types.ItemType
+				Rarity   int
+				Chance   float64
+			}{"妖核", types.ItemTypeMaterial, 4, 0.10},
+			struct {
+				Name     string
+				ItemType types.ItemType
+				Rarity   int
+				Chance   float64
+			}{"妖兽材料", types.ItemTypeMaterial, 3, 0.25},
+		)
+	}
+	// 境界>=5 (化神) 额外掉落
+	if realmLevel >= 5 {
+		drops = append(drops, struct {
+			Name     string
+			ItemType types.ItemType
+			Rarity   int
+			Chance   float64
+		}{"妖兽精魄", types.ItemTypeMaterial, 5, 0.05})
+	}
+
+	var dropped []string
+	for _, d := range drops {
+		if rand.Float64() < d.Chance {
+			s.ensureItemInInventory(ctx, entityID, d.Name, d.ItemType, d.Rarity)
+			dropped = append(dropped, d.Name)
+		}
+	}
+
+	if len(dropped) == 0 {
+		return "未掉落任何物品"
+	}
+	return "掉落: " + strings.Join(dropped, ", ")
 }
 
 // 探索
@@ -1011,7 +1346,7 @@ func (s *OperationService) executeSendMessage(ctx context.Context, entity *types
 	}, nil
 }
 
-// 施法
+// 施法（含装备/灵根加成 + 实际伤害目标）
 func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	spellID, ok := op.Params["spell_id"].(string)
 	if !ok {
@@ -1045,8 +1380,50 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 
 	attr.Qi -= float64(spell.Cost)
 
-	// 计算效果
-	damage := float64(spell.BaseDamage) * (1 + float64(attr.DivineSense)/100)
+	// 装备法术加成
+	eq := s.GetEquipmentBonuses(ctx, entity.ID)
+
+	// 灵根元素匹配加成
+	elementBonus := 1.0
+	spellElement := string(spell.Element)
+	for _, root := range attr.SpiritualRoots {
+		if root.Element == spellElement {
+			elementBonus = 1.5
+			break
+		}
+	}
+
+	// 计算伤害：基础 * 神识 * 灵根加成 * 装备加成
+	damage := float64(spell.BaseDamage) * (1 + float64(attr.DivineSense)/100) * elementBonus
+	damage *= (1 + eq.AttackPower/100) // 装备攻击%叠乘
+
+	// 如果法术是治疗类型
+	healAmount := float64(spell.BaseHeal)
+
+	// 处理目标
+	targetID, hasTarget := op.Params["target_id"].(string)
+	if hasTarget && targetID != "" {
+		target, err := s.entityRepo.GetByID(ctx, types.EntityID(targetID))
+		if err == nil && target.Status != types.StatusDead {
+			targetAttr, _ := s.entityRepo.GetAttributes(ctx, target.ID)
+
+			if spell.Type == types.SpellTypeAttack {
+				targetAttr.Qi -= damage
+				if targetAttr.Qi <= 0 {
+					targetAttr.Qi = 0
+					target.Status = types.StatusDead
+				}
+				s.entityRepo.UpdateAttributes(ctx, target.ID, targetAttr)
+				s.entityRepo.Update(ctx, target)
+			} else if spell.Type == types.SpellTypeHeal {
+				targetAttr.Qi += healAmount
+				if targetAttr.Qi > targetAttr.MaxQi {
+					targetAttr.Qi = targetAttr.MaxQi
+				}
+				s.entityRepo.UpdateAttributes(ctx, target.ID, targetAttr)
+			}
+		}
+	}
 
 	// 更新冷却时间
 	s.spellRepo.UpdateSpellCastTime(ctx, entity.ID, spell.ID)
@@ -1054,14 +1431,20 @@ func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.E
 
 	s.modifyKarma(ctx, entity.ID, -1, "施法")
 
+	effects := map[string]interface{}{
+		"spell_name":    spell.Name,
+		"damage":        damage,
+		"qi_cost":       spell.Cost,
+		"element_match": elementBonus > 1.0,
+	}
+	if hasTarget && targetID != "" {
+		effects["target_id"] = targetID
+	}
+
 	return &types.OperationResult{
 		Success: true,
 		Message: fmt.Sprintf("施放%s成功！", spell.Name),
-		Effects: map[string]interface{}{
-			"spell_name": spell.Name,
-			"damage":     damage,
-			"qi_cost":    spell.Cost,
-		},
+		Effects: effects,
 	}, nil
 }
 // 离开宗门
@@ -1231,7 +1614,7 @@ func (s *OperationService) executeAcceptFriend(ctx context.Context, entity *type
 	}, nil
 }
 
-// 逃跑
+// 逃跑（同时恢复目标战斗状态）
 func (s *OperationService) executeFlee(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	if entity.Status != types.StatusCombat {
 		return &types.OperationResult{
@@ -1239,6 +1622,18 @@ func (s *OperationService) executeFlee(ctx context.Context, entity *types.Entity
 			Message: "当前不在战斗中",
 		}, nil
 	}
+
+	// 同时恢复目标战斗状态
+	targetID, ok := op.Params["target_id"].(string)
+	if ok && targetID != "" {
+		target, err := s.entityRepo.GetByID(ctx, types.EntityID(targetID))
+		if err == nil && target != nil && target.Status == types.StatusCombat {
+			target.Status = types.StatusNormal
+			target.UpdatedAt = time.Now()
+			s.entityRepo.Update(ctx, target)
+		}
+	}
+
 	entity.Status = types.StatusNormal
 	entity.UpdatedAt = time.Now()
 	s.entityRepo.Update(ctx, entity)
@@ -1250,7 +1645,7 @@ func (s *OperationService) executeFlee(ctx context.Context, entity *types.Entity
 	}, nil
 }
 
-// 使用技能
+// 使用技能（实际伤害目标）
 func (s *OperationService) executeUseSkill(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	if entity.Status != types.StatusCombat {
 		return &types.OperationResult{
@@ -1258,15 +1653,55 @@ func (s *OperationService) executeUseSkill(ctx context.Context, entity *types.En
 			Message: "当前不在战斗中",
 		}, nil
 	}
+
+	targetID, ok := op.Params["target_id"].(string)
+	if !ok || targetID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少目标ID")
+	}
+
+	target, err := s.entityRepo.GetByID(ctx, types.EntityID(targetID))
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrEntityNotFound, "目标不存在")
+	}
+
+	if target.Status == types.StatusDead {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "目标已死亡")
+	}
+
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
-	skillDamage := 10 + float64(attr.AttackPower)*1.2
+	targetAttr, _ := s.entityRepo.GetAttributes(ctx, target.ID)
+
+	// 装备加成
+	eq := s.GetEquipmentBonuses(ctx, entity.ID)
+
+	skillDamage := 10 + (float64(attr.AttackPower)+eq.AttackPower)*1.2
+
+	// 实际伤害目标
+	targetAttr.Qi -= skillDamage
+	killed := false
+	if targetAttr.Qi <= 0 {
+		targetAttr.Qi = 0
+		target.Status = types.StatusDead
+		killed = true
+	}
+
+	s.entityRepo.UpdateAttributes(ctx, target.ID, targetAttr)
 	s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
+	s.entityRepo.Update(ctx, entity)
+	if killed {
+		s.entityRepo.Update(ctx, target)
+	}
+
 	s.modifyKarma(ctx, entity.ID, -1, "使用技能")
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "使用技能攻击！",
 		Effects: map[string]interface{}{
-			"damage": skillDamage,
+			"damage":    skillDamage,
+			"target_id": targetID,
+			"killed":    killed,
+			"target_qi": targetAttr.Qi,
 		},
 	}, nil
 }
@@ -1559,6 +1994,204 @@ func (s *OperationService) executeSectInfo(ctx context.Context, entity *types.En
 			"alignment":    sect.Alignment,
 			"members":      memberList,
 			"member_count": len(memberList),
+		},
+	}, nil
+}
+
+// ── 功法系统操作 ──
+
+// executeLearnMethod 学习功法
+func (s *OperationService) executeLearnMethod(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	methodID, ok := op.Params["method_id"].(string)
+	if !ok || methodID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少功法ID")
+	}
+
+	if s.methodRepo == nil {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "功法系统不可用")
+	}
+
+	// 查询功法是否存在
+	method, err := s.methodRepo.GetByID(ctx, methodID)
+	if err != nil || method == nil {
+		return &types.OperationResult{
+			Success: false,
+			Message: "功法不存在",
+		}, nil
+	}
+
+	// 验证境界要求
+	if method.RealmRequirement != "" && types.CultivationRealmLevel(entity.Realm) < types.CultivationRealmLevel(types.CultivationRealm(method.RealmRequirement)) {
+		return &types.OperationResult{
+			Success: false,
+			Message: fmt.Sprintf("境界不足，需要 %s", method.RealmRequirement),
+		}, nil
+	}
+
+	// 检查是否已学习
+	entityMethods, _ := s.methodRepo.GetEntityMethods(ctx, entity.ID)
+	for _, em := range entityMethods {
+		if em.MethodID == methodID {
+			return &types.OperationResult{
+				Success: false,
+				Message: "已学习该功法",
+			}, nil
+		}
+	}
+
+	// 学习功法
+	if err := s.methodRepo.LearnMethod(ctx, entity.ID, methodID); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "学习功法失败")
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("成功学习功法：%s（%s）", method.Name, method.Quality),
+		Effects: map[string]interface{}{
+			"method_id":   methodID,
+			"method_name": method.Name,
+			"quality":     method.Quality,
+		},
+	}, nil
+}
+
+// executeSetMainMethod 设置主修功法
+func (s *OperationService) executeSetMainMethod(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	methodID, ok := op.Params["method_id"].(string)
+	if !ok || methodID == "" {
+		return nil, errors.NewGameError(errors.ErrInvalidParams, "缺少功法ID")
+	}
+
+	if s.methodRepo == nil {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "功法系统不可用")
+	}
+
+	// 验证已学习
+	entityMethods, err := s.methodRepo.GetEntityMethods(ctx, entity.ID)
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "查询功法失败")
+	}
+
+	learned := false
+	for _, em := range entityMethods {
+		if em.MethodID == methodID {
+			learned = true
+			break
+		}
+	}
+	if !learned {
+		return &types.OperationResult{
+			Success: false,
+			Message: "未学习该功法",
+		}, nil
+	}
+
+	method, _ := s.methodRepo.GetByID(ctx, methodID)
+
+	// 设置为主修
+	if err := s.methodRepo.SetMainMethod(ctx, entity.ID, methodID); err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "设置主修功法失败")
+	}
+
+	msg := "成功设置主修功法"
+	if method != nil {
+		msg = fmt.Sprintf("已将主修功法设为：%s（%s）", method.Name, method.Quality)
+	}
+
+	methodName := ""
+	if method != nil {
+		methodName = method.Name
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: msg,
+		Effects: map[string]interface{}{
+			"method_id":   methodID,
+			"method_name": methodName,
+		},
+	}, nil
+}
+
+// executeListMethods 查看可学功法列表
+func (s *OperationService) executeListMethods(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	if s.methodRepo == nil {
+		return nil, errors.NewGameError(errors.ErrInvalidOperation, "功法系统不可用")
+	}
+
+	// 根据当前境界筛选可学功法
+	methods, err := s.methodRepo.GetByRealm(ctx, string(entity.Realm))
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "查询功法失败")
+	}
+
+	// 已学习的功法
+	entityMethods, _ := s.methodRepo.GetEntityMethods(ctx, entity.ID)
+	learnedMap := make(map[string]bool)
+	mainMethodID := ""
+	for _, em := range entityMethods {
+		learnedMap[em.MethodID] = true
+		if em.IsMainMethod {
+			mainMethodID = em.MethodID
+		}
+	}
+
+	// 也获取更高境界的功法预览
+	allRealms := []types.CultivationRealm{
+		types.RealmMortal, types.RealmQiCondensation, types.RealmFoundation,
+		types.RealmGoldenCore, types.RealmNascentSoul, types.RealmSoulTransform,
+	}
+	var previewMethods []*MethodInfo
+	current := entity.Realm
+	found := false
+	for _, r := range allRealms {
+		if r == current {
+			found = true
+			continue
+		}
+		if found {
+			higherMethods, _ := s.methodRepo.GetByRealm(ctx, string(r))
+			previewMethods = append(previewMethods, higherMethods...)
+			if len(previewMethods) >= 3 {
+				break
+			}
+		}
+	}
+
+	methodList := make([]map[string]interface{}, 0, len(methods))
+	for _, m := range methods {
+		isLearned := learnedMap[m.ID]
+		isMain := m.ID == mainMethodID
+		methodList = append(methodList, map[string]interface{}{
+			"id":                     m.ID,
+			"name":                   m.Name,
+			"quality":                m.Quality,
+			"element_affinity":       m.ElementAffinity,
+			"cultivation_multiplier": m.CultivationMultiplier,
+			"breakthrough_bonus":     m.BreakthroughBonus,
+			"description":            m.Description,
+			"learned":                isLearned,
+			"is_main":                isMain,
+		})
+	}
+
+	previewList := make([]map[string]interface{}, 0, len(previewMethods))
+	for _, m := range previewMethods {
+		previewList = append(previewList, map[string]interface{}{
+			"id":      m.ID,
+			"name":    m.Name,
+			"quality": m.Quality,
+		})
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("当前境界可学功法 %d 部", len(methodList)),
+		Effects: map[string]interface{}{
+			"methods":          methodList,
+			"count":            len(methodList),
+			"higher_preview":   previewList,
+			"main_method_id":   mainMethodID,
 		},
 	}, nil
 }

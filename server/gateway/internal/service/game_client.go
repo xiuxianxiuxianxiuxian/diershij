@@ -226,6 +226,8 @@ func protoToEntity(e *cultivation.Entity) *types.Entity {
 			RootPurity:          int(e.Attributes.RootPurity),
 			PoisonLevel:         int(e.Attributes.PoisonLevel),
 			CurseLevel:          int(e.Attributes.CurseLevel),
+			RootAwakened:        e.Attributes.RootAwakened,
+			MutatedRoot:         e.Attributes.MutatedRoot,
 		},
 		Karma: types.Karma{
 			KarmaValue:   int(e.Karma.KarmaValue),
@@ -246,6 +248,17 @@ func protoToEntity(e *cultivation.Entity) *types.Entity {
 			HighGrade:    e.SpiritStones.HighGrade,
 			PremiumGrade: e.SpiritStones.PremiumGrade,
 		}
+	}
+		// Map SpiritualRoots from proto Attributes
+	if len(e.Attributes.SpiritualRoots) > 0 {
+		roots := make([]types.SpiritualRoot, 0, len(e.Attributes.SpiritualRoots))
+		for _, r := range e.Attributes.SpiritualRoots {
+			roots = append(roots, types.SpiritualRoot{
+				Element: r.Element,
+				Purity:  int(r.Purity),
+			})
+		}
+		entity.Attributes.SpiritualRoots = roots
 	}
 
 	return entity

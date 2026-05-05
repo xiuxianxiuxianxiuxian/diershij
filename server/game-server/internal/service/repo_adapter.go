@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cultivation-world/game-server/internal/repository"
+	"github.com/cultivation-world/shared/types"
 )
 
 type sectRepoAdapter struct {
@@ -163,6 +164,124 @@ func (a *friendRepoAdapter) GetRequestByID(ctx context.Context, requestID string
 
 func (a *friendRepoAdapter) AcceptRequest(ctx context.Context, requestID string) error {
 	return a.repo.AcceptRequest(ctx, requestID)
+}
+
+type methodRepoAdapter struct {
+	repo *repository.MethodRepository
+}
+
+func NewMethodRepoAdapter(repo *repository.MethodRepository) MethodRepository {
+	return &methodRepoAdapter{repo: repo}
+}
+
+func (a *methodRepoAdapter) GetByID(ctx context.Context, id string) (*MethodInfo, error) {
+	m, err := a.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil {
+		return nil, nil
+	}
+	return &MethodInfo{
+		ID:                    m.ID,
+		Name:                  m.Name,
+		Quality:               m.Quality,
+		RealmRequirement:      m.RealmRequirement,
+		ElementAffinity:       m.ElementAffinity,
+		CultivationMultiplier: m.CultivationMultiplier,
+		BreakthroughBonus:     m.BreakthroughBonus,
+		Description:           m.Description,
+	}, nil
+}
+
+func (a *methodRepoAdapter) GetByRealm(ctx context.Context, realm string) ([]*MethodInfo, error) {
+	methods, err := a.repo.GetByRealm(ctx, realm)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*MethodInfo, 0, len(methods))
+	for _, m := range methods {
+		result = append(result, &MethodInfo{
+			ID:                    m.ID,
+			Name:                  m.Name,
+			Quality:               m.Quality,
+			RealmRequirement:      m.RealmRequirement,
+			ElementAffinity:       m.ElementAffinity,
+			CultivationMultiplier: m.CultivationMultiplier,
+			BreakthroughBonus:     m.BreakthroughBonus,
+			Description:           m.Description,
+		})
+	}
+	return result, nil
+}
+
+func (a *methodRepoAdapter) GetEntityMethods(ctx context.Context, entityID types.EntityID) ([]*EntityMethodInfo, error) {
+	methods, err := a.repo.GetEntityMethods(ctx, string(entityID))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*EntityMethodInfo, 0, len(methods))
+	for _, em := range methods {
+		methodInfo := &MethodInfo{ID: em.MethodID}
+		if m, err := a.repo.GetByID(ctx, em.MethodID); err == nil && m != nil {
+			methodInfo = &MethodInfo{
+				ID:                    m.ID,
+				Name:                  m.Name,
+				Quality:               m.Quality,
+				RealmRequirement:      m.RealmRequirement,
+				ElementAffinity:       m.ElementAffinity,
+				CultivationMultiplier: m.CultivationMultiplier,
+				BreakthroughBonus:     m.BreakthroughBonus,
+				Description:           m.Description,
+			}
+		}
+		result = append(result, &EntityMethodInfo{
+			MethodID:     em.MethodID,
+			Method:       methodInfo,
+			MasteryLevel: em.MasteryLevel,
+			IsMainMethod: em.IsMainMethod,
+			LearnedAt:    em.LearnedAt.Unix(),
+		})
+	}
+	return result, nil
+}
+
+func (a *methodRepoAdapter) LearnMethod(ctx context.Context, entityID types.EntityID, methodID string) error {
+	return a.repo.LearnMethod(ctx, string(entityID), methodID)
+}
+
+func (a *methodRepoAdapter) SetMainMethod(ctx context.Context, entityID types.EntityID, methodID string) error {
+	return a.repo.SetMainMethod(ctx, string(entityID), methodID)
+}
+
+func (a *methodRepoAdapter) GetMainMethod(ctx context.Context, entityID types.EntityID) (*EntityMethodInfo, error) {
+	em, err := a.repo.GetMainMethod(ctx, string(entityID))
+	if err != nil {
+		return nil, err
+	}
+	if em == nil {
+		return nil, nil
+	}
+	methodInfo := &MethodInfo{ID: em.MethodID}
+	if m, err := a.repo.GetByID(ctx, em.MethodID); err == nil && m != nil {
+		methodInfo = &MethodInfo{
+			ID:                    m.ID,
+			Name:                  m.Name,
+			Quality:               m.Quality,
+			RealmRequirement:      m.RealmRequirement,
+			ElementAffinity:       m.ElementAffinity,
+			CultivationMultiplier: m.CultivationMultiplier,
+			BreakthroughBonus:     m.BreakthroughBonus,
+			Description:           m.Description,
+		}
+	}
+	return &EntityMethodInfo{
+		MethodID:     em.MethodID,
+		Method:       methodInfo,
+		MasteryLevel: em.MasteryLevel,
+		IsMainMethod: em.IsMainMethod,
+		LearnedAt:    em.LearnedAt.Unix(),
+	}, nil
 }
 
 func (a *friendRepoAdapter) GetFriends(ctx context.Context, entityID string) ([]*FriendshipInfo, error) {

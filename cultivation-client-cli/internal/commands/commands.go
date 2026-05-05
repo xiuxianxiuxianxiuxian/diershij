@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+
 	"cultivation-client-cli/internal/client"
 
 	"github.com/gorilla/websocket"
@@ -101,6 +103,13 @@ func init() {
 			{Names: []string{"卸下", "unequip"}, Desc: "卸下装备", Handler: cmdUnequipItem, Usage: "卸下 <装备位>"},
 		}},
 
+		// ── 功法 ──
+		{Names: []string{"功法", "method"}, Desc: "功法系统", Sub: []*CmdDef{
+			{Names: []string{"列表", "list", "ls"}, Desc: "查看可学功法", Handler: cmdMethodList},
+			{Names: []string{"学习", "learn"}, Desc: "学习功法", Handler: cmdMethodLearn, Usage: "学习 <功法ID>"},
+			{Names: []string{"装备", "equip", "set"}, Desc: "设置主修功法", Handler: cmdMethodSetMain, Usage: "装备 <功法ID>"},
+		}},
+
 		// ── Flat aliases for backward compatibility (hidden from help) ──
 		{Names: []string{"status", "st"}, Handler: cmdStatus, Context: func() bool { return false }},
 		{Names: []string{"role"}, Handler: cmdStatus, Context: func() bool { return false }},
@@ -130,6 +139,9 @@ func init() {
 		{Names: []string{"list_friends"}, Handler: cmdListFriends, Context: func() bool { return false }},
 		{Names: []string{"sect_info"}, Handler: cmdSectInfo, Context: func() bool { return false }},
 		{Names: []string{"equip"}, Handler: cmdShowEquipment, Context: func() bool { return false }},
+		{Names: []string{"list_methods"}, Handler: cmdMethodList, Context: func() bool { return false }},
+		{Names: []string{"learn_method"}, Handler: cmdMethodLearn, Context: func() bool { return false }},
+		{Names: []string{"set_main_method"}, Handler: cmdMethodSetMain, Context: func() bool { return false }},
 	}
 }
 
@@ -250,7 +262,19 @@ func cmdAttributes(conn *websocket.Conn, entityID string, args []string) {
 		getIntDef(attrs, "divine_sense"), getIntDef(attrs, "dao_heart"), getIntDef(attrs, "enlightenment"))
 	fmt.Printf("  寿命: %d / %d\n",
 		getIntDef(attrs, "remaining_lifespan"), getIntDef(attrs, "max_lifespan"))
-	fmt.Printf("  灵根 purity: %d\n", getIntDef(attrs, "root_purity"))
+	// 灵根显示
+	if roots, ok := attrs["spiritual_roots"].([]interface{}); ok && len(roots) > 0 {
+		fmt.Printf("  ── 灵根 ──\n")
+		for _, r := range roots {
+			if rm, ok := r.(map[string]interface{}); ok {
+				elem := getStr(rm, "element")
+				purity := getIntDef(rm, "purity")
+				fmt.Printf("  %s 纯度:%d\n", elemDisplay(elem), purity)
+			}
+		}
+	} else {
+		fmt.Printf("  灵根 purity: %d\n", getIntDef(attrs, "root_purity"))
+	}
 	if ss, ok := attrs["spirit_stones"].(map[string]interface{}); ok {
 		fmt.Printf("  灵石: %d (低) %d (中) %d (高) %d (极)\n",
 			getInt64Def(ss, "low_grade"), getInt64Def(ss, "medium_grade"),
@@ -673,10 +697,38 @@ func cmdShowEquipment(conn *websocket.Conn, entityID string, args []string) {
 			line += fmt.Sprintf(" 耐久:%d", durability)
 		}
 		fmt.Println(line)
+
+		// 解析并显示属性加成
+		if aj, ok := item["attributes_json"].(string); ok && aj != "" {
+			var attrs map[string]interface{}
+			if err := json.Unmarshal([]byte(aj), &attrs); err == nil && len(attrs) > 0 {
+				bonusParts := []string{}
+				attrNames := map[string]string{
+					"attack_power": "攻击", "defense": "防御", "speed": "速度",
+					"max_qi": "灵力上限", "max_spiritual_power": "神识上限",
+					"crit_rate": "会心率", "crit_damage": "会心伤害",
+					"dodge_rate": "闪避", "hit_rate": "命中",
+					"penetration": "穿透", "damage_reduction": "减伤",
+					"divine_sense": "神识", "comprehension": "悟性",
+					"constitution": "根骨", "luck": "机缘",
+				}
+				for k, displayName := range attrNames {
+					if v, ok := attrs[k].(float64); ok && v != 0 {
+						if v == float64(int(v)) {
+							bonusParts = append(bonusParts, fmt.Sprintf("%s+%d", displayName, int(v)))
+						} else {
+							bonusParts = append(bonusParts, fmt.Sprintf("%s+%.1f", displayName, v))
+						}
+					}
+				}
+				if len(bonusParts) > 0 {
+					fmt.Printf("    └ %s\n", strings.Join(bonusParts, " "))
+				}
+			}
+		}
 	}
 	fmt.Println()
 }
-
 func cmdLearnSpell(conn *websocket.Conn, entityID string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("用法: 学习 <法术ID>")
@@ -1231,4 +1283,28 @@ func statusDisplay(s string) string {
 		}
 		return s
 	}
+}
+
+func cmdMethodList(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "list_methods", nil)
+}
+
+func cmdMethodLearn(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 学习 <功法ID>")
+		return
+	}
+	client.SendAction(conn, "learn_method", map[string]interface{}{
+		"method_id": args[0],
+	})
+}
+
+func cmdMethodSetMain(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 装备 <功法ID>")
+		return
+	}
+	client.SendAction(conn, "set_main_method", map[string]interface{}{
+		"method_id": args[0],
+	})
 }

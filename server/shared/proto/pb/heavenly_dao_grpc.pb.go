@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	HeavenlyDaoService_EvaluateKarma_FullMethodName    = "/cultivation.HeavenlyDaoService/EvaluateKarma"
-	HeavenlyDaoService_CheckTribulation_FullMethodName = "/cultivation.HeavenlyDaoService/CheckTribulation"
-	HeavenlyDaoService_BalanceCheck_FullMethodName     = "/cultivation.HeavenlyDaoService/BalanceCheck"
-	HeavenlyDaoService_ApplyKarmaDecay_FullMethodName  = "/cultivation.HeavenlyDaoService/ApplyKarmaDecay"
+	HeavenlyDaoService_EvaluateKarma_FullMethodName       = "/cultivation.HeavenlyDaoService/EvaluateKarma"
+	HeavenlyDaoService_CheckTribulation_FullMethodName    = "/cultivation.HeavenlyDaoService/CheckTribulation"
+	HeavenlyDaoService_BalanceCheck_FullMethodName        = "/cultivation.HeavenlyDaoService/BalanceCheck"
+	HeavenlyDaoService_ApplyKarmaDecay_FullMethodName     = "/cultivation.HeavenlyDaoService/ApplyKarmaDecay"
+	HeavenlyDaoService_ExecuteBreakthrough_FullMethodName = "/cultivation.HeavenlyDaoService/ExecuteBreakthrough"
+	HeavenlyDaoService_ExecuteCultivate_FullMethodName    = "/cultivation.HeavenlyDaoService/ExecuteCultivate"
 )
 
 // HeavenlyDaoServiceClient is the client API for HeavenlyDaoService service.
@@ -33,6 +35,10 @@ type HeavenlyDaoServiceClient interface {
 	CheckTribulation(ctx context.Context, in *TribulationRequest, opts ...grpc.CallOption) (*TribulationResponse, error)
 	BalanceCheck(ctx context.Context, in *BalanceCheckRequest, opts ...grpc.CallOption) (*BalanceCheckResponse, error)
 	ApplyKarmaDecay(ctx context.Context, in *DecayRequest, opts ...grpc.CallOption) (*DecayResponse, error)
+	// New: full breakthrough evaluation
+	ExecuteBreakthrough(ctx context.Context, in *BreakthroughRequest, opts ...grpc.CallOption) (*BreakthroughResponse, error)
+	// New: cultivation efficiency evaluation
+	ExecuteCultivate(ctx context.Context, in *CultivateRequest, opts ...grpc.CallOption) (*CultivateResponse, error)
 }
 
 type heavenlyDaoServiceClient struct {
@@ -79,6 +85,24 @@ func (c *heavenlyDaoServiceClient) ApplyKarmaDecay(ctx context.Context, in *Deca
 	return out, nil
 }
 
+func (c *heavenlyDaoServiceClient) ExecuteBreakthrough(ctx context.Context, in *BreakthroughRequest, opts ...grpc.CallOption) (*BreakthroughResponse, error) {
+	out := new(BreakthroughResponse)
+	err := c.cc.Invoke(ctx, HeavenlyDaoService_ExecuteBreakthrough_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *heavenlyDaoServiceClient) ExecuteCultivate(ctx context.Context, in *CultivateRequest, opts ...grpc.CallOption) (*CultivateResponse, error) {
+	out := new(CultivateResponse)
+	err := c.cc.Invoke(ctx, HeavenlyDaoService_ExecuteCultivate_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HeavenlyDaoServiceServer is the server API for HeavenlyDaoService service.
 // All implementations must embed UnimplementedHeavenlyDaoServiceServer
 // for forward compatibility
@@ -87,6 +111,10 @@ type HeavenlyDaoServiceServer interface {
 	CheckTribulation(context.Context, *TribulationRequest) (*TribulationResponse, error)
 	BalanceCheck(context.Context, *BalanceCheckRequest) (*BalanceCheckResponse, error)
 	ApplyKarmaDecay(context.Context, *DecayRequest) (*DecayResponse, error)
+	// New: full breakthrough evaluation
+	ExecuteBreakthrough(context.Context, *BreakthroughRequest) (*BreakthroughResponse, error)
+	// New: cultivation efficiency evaluation
+	ExecuteCultivate(context.Context, *CultivateRequest) (*CultivateResponse, error)
 	mustEmbedUnimplementedHeavenlyDaoServiceServer()
 }
 
@@ -105,6 +133,12 @@ func (UnimplementedHeavenlyDaoServiceServer) BalanceCheck(context.Context, *Bala
 }
 func (UnimplementedHeavenlyDaoServiceServer) ApplyKarmaDecay(context.Context, *DecayRequest) (*DecayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyKarmaDecay not implemented")
+}
+func (UnimplementedHeavenlyDaoServiceServer) ExecuteBreakthrough(context.Context, *BreakthroughRequest) (*BreakthroughResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBreakthrough not implemented")
+}
+func (UnimplementedHeavenlyDaoServiceServer) ExecuteCultivate(context.Context, *CultivateRequest) (*CultivateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteCultivate not implemented")
 }
 func (UnimplementedHeavenlyDaoServiceServer) mustEmbedUnimplementedHeavenlyDaoServiceServer() {}
 
@@ -191,6 +225,42 @@ func _HeavenlyDaoService_ApplyKarmaDecay_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HeavenlyDaoService_ExecuteBreakthrough_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BreakthroughRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeavenlyDaoServiceServer).ExecuteBreakthrough(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeavenlyDaoService_ExecuteBreakthrough_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeavenlyDaoServiceServer).ExecuteBreakthrough(ctx, req.(*BreakthroughRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HeavenlyDaoService_ExecuteCultivate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CultivateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeavenlyDaoServiceServer).ExecuteCultivate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeavenlyDaoService_ExecuteCultivate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeavenlyDaoServiceServer).ExecuteCultivate(ctx, req.(*CultivateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HeavenlyDaoService_ServiceDesc is the grpc.ServiceDesc for HeavenlyDaoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -213,6 +283,14 @@ var HeavenlyDaoService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyKarmaDecay",
 			Handler:    _HeavenlyDaoService_ApplyKarmaDecay_Handler,
+		},
+		{
+			MethodName: "ExecuteBreakthrough",
+			Handler:    _HeavenlyDaoService_ExecuteBreakthrough_Handler,
+		},
+		{
+			MethodName: "ExecuteCultivate",
+			Handler:    _HeavenlyDaoService_ExecuteCultivate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

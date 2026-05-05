@@ -40,6 +40,7 @@ func main() {
 	sectRepo := repository.NewSectRepository(db)
 	recipeRepo := repository.NewRecipeRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
+	methodRepo := repository.NewMethodRepository(db)
 
 	worldConn, err := grpc.Dial(
 		fmt.Sprintf("%s:%d", cfg.WorldEngine.Host, cfg.WorldEngine.Port),
@@ -62,7 +63,8 @@ func main() {
 	daoClient := service.NewHeavenlyDaoGrpcClient(daoConn)
 
 	operationSvc := service.NewOperationService(entityRepo, itemRepo, inventoryRepo, spellRepo, messageRepo, worldClient, daoClient,
-		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo), service.NewFriendRepoAdapter(friendRepo))
+		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo), service.NewFriendRepoAdapter(friendRepo),
+		service.NewMethodRepoAdapter(methodRepo))
 	gameSvc := service.NewGameService(entityRepo, operationSvc, spellRepo, itemRepo, inventoryRepo)
 
 	grpcServer := grpc.NewServer(

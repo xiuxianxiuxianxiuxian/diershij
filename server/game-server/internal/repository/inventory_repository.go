@@ -155,6 +155,12 @@ func (r *PostgresInventoryRepository) GetEquippedItems(ctx context.Context, enti
 	return items, rows.Err()
 }
 
+func (r *PostgresInventoryRepository) UpdateDurability(ctx context.Context, entityID types.EntityID, itemID types.ItemID, durability int) error {
+	query := `UPDATE inventory SET durability = $3 WHERE entity_id = $1 AND item_id = $2`
+	_, err := r.db.Pool().Exec(ctx, query, entityID, itemID, durability)
+	return err
+}
+
 func (r *PostgresInventoryRepository) scanInventoryItem(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*types.InventoryItem, error) {

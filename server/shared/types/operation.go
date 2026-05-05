@@ -35,6 +35,9 @@ const (
     ActionLearnSpell    ActionType = "learn_spell"
     ActionListFriends   ActionType = "list_friends"
     ActionSectInfo      ActionType = "sect_info"
+    ActionLearnMethod   ActionType = "learn_method"
+    ActionSetMainMethod ActionType = "set_main_method"
+    ActionListMethods   ActionType = "list_methods"
 )
 
 type Operation struct {

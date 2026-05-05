@@ -12,6 +12,10 @@ service HeavenlyDaoService {
     rpc CheckTribulation(TribulationRequest) returns (TribulationResponse);
     rpc BalanceCheck(BalanceCheckRequest) returns (BalanceCheckResponse);
     rpc ApplyKarmaDecay(DecayRequest) returns (DecayResponse);
+    // New: full breakthrough evaluation
+    rpc ExecuteBreakthrough(BreakthroughRequest) returns (BreakthroughResponse);
+    // New: cultivation efficiency evaluation
+    rpc ExecuteCultivate(CultivateRequest) returns (CultivateResponse);
 }
 
 message KarmaRequest {
@@ -31,6 +35,9 @@ message KarmaResponse {
 message TribulationRequest {
     string entity_id = 1;
     string target_realm = 2;
+    int32 karma = 3;
+    int32 merit = 4;
+    int32 luck = 5;
 }
 
 message TribulationResponse {
@@ -38,6 +45,63 @@ message TribulationResponse {
     double probability = 2;
     double strength = 3;
     string tribulation_type = 4;
+}
+
+// Breakthrough
+message BreakthroughRequest {
+    string entity_id = 1;
+    string current_realm = 2;
+    string target_realm = 3;
+    double cultivation_progress = 4;
+    double comprehension = 5;
+    double method_quality = 6;
+    double resource_bonus = 7;
+    int32 mental_stability = 8;
+    int32 luck = 9;
+    int32 karma = 10;
+    int32 merit = 11;
+}
+
+message BreakthroughResponse {
+    bool success = 1;
+    string new_realm = 2;
+    double success_rate = 3;
+    bool tribulation_triggered = 4;
+    double tribulation_strength = 5;
+    string tribulation_type = 6;
+    double penalty_progress_loss = 7;
+    double penalty_cooldown_hours = 8;
+    int32 penalty_mental_damage = 9;
+    string message = 10;
+}
+
+// Cultivate
+message CultivateRequest {
+    string entity_id = 1;
+    string realm = 2;
+    repeated SpiritualRootInput spiritual_roots = 3;
+    double spiritual_density = 4;
+    int32 comprehension = 5;
+    int32 mental_stability = 6;
+    int32 base_lifespan = 7;
+    int32 current_age = 8;
+}
+
+message SpiritualRootInput {
+    string element = 1;
+    int32 purity = 2;
+}
+
+message CultivateResponse {
+    bool success = 1;
+    double cultivation_gained = 2;
+    double rate = 3;
+    double realm_bonus = 4;
+    double spiritual_mult = 5;
+    double method_match = 6;
+    double mental_factor = 7;
+    double aging_penalty = 8;
+    string message = 9;
 }
 
 message BalanceCheckRequest {}

@@ -83,6 +83,7 @@ PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db
 PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/06_add_password_hash.sql
 PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/07_add_name_unique.sql
 PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/08_add_spiritual_roots_methods.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/09_complete_schema.sql
 
 # Windows: start/stop all backend services locally (double-click .bat or PowerShell)
 .\启动游戏.bat

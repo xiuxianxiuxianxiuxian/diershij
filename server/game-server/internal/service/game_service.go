@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -36,6 +37,11 @@ func NewGameService(entityRepo EntityRepository, operationSvc *OperationService,
 }
 
 func (s *GameService) CreateEntity(ctx context.Context, req *cultivation.CreateEntityRequest) (*cultivation.CreateEntityResponse, error) {
+	// Check if username already exists
+	if existing, err := s.entityRepo.GetByName(ctx, req.Name); err == nil && existing != nil {
+		return nil, status.Errorf(codes.AlreadyExists, "username already exists")
+	}
+
 	entityID := types.GenerateEntityID()
 	now := time.Now()
 
@@ -98,12 +104,31 @@ func (s *GameService) CreateEntity(ctx context.Context, req *cultivation.CreateE
 		UpdatedAt: now,
 	}
 
+	// 生成灵根
+	roots := generateSpiritualRoots()
+	entity.Attributes.SpiritualRoots = roots
+	// 计算平均纯度作为 root_purity
+	if len(roots) > 0 {
+		total := 0
+		for _, r := range roots {
+			total += r.Purity
+		}
+		entity.Attributes.RootPurity = total / len(roots)
+	}
+
 	if err := s.entityRepo.Create(ctx, entity); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create entity: %v", err)
 	}
 
 	if err := s.entityRepo.UpdateAttributes(ctx, entityID, &entity.Attributes); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to save attributes: %v", err)
+	}
+
+	// 持久化灵根
+	if len(roots) > 0 {
+		if err := s.entityRepo.UpdateSpiritualRoots(ctx, entityID, roots); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to save spiritual roots: %v", err)
+		}
 	}
 
 	// Hash and store password
@@ -120,6 +145,45 @@ func (s *GameService) CreateEntity(ctx context.Context, req *cultivation.CreateE
 	return &cultivation.CreateEntityResponse{
 		Entity: entityToProto(entity),
 	}, nil
+}
+
+// generateSpiritualRoots generates 1-3 random spiritual roots for a new entity.
+// Primary root: purity 60-90, secondary roots: purity 20-50.
+// 5% chance of a mutated root (ice/lightning/poison).
+func generateSpiritualRoots() []types.SpiritualRoot {
+	elements := []string{"fire", "water", "wood", "metal", "earth"}
+	rareElements := []string{"wind", "thunder", "ice"}
+
+	count := rand.Intn(3) + 1 // 1-3 roots
+
+	// Shuffle elements
+	perm := rand.Perm(len(elements))
+	roots := make([]types.SpiritualRoot, 0, count)
+
+	for i := 0; i < count && i < len(elements); i++ {
+		elem := elements[perm[i]]
+		purity := 0
+
+		if i == 0 {
+			// Primary root: high purity
+			purity = rand.Intn(31) + 60 // 60-90
+			// 5% mutation chance on primary root
+			if rand.Float64() < 0.05 {
+				rareElem := rareElements[rand.Intn(len(rareElements))]
+				elem = rareElem
+			}
+		} else {
+			// Secondary roots: lower purity
+			purity = rand.Intn(31) + 20 // 20-50
+		}
+
+		roots = append(roots, types.SpiritualRoot{
+			Element: elem,
+			Purity:  purity,
+		})
+	}
+
+	return roots
 }
 
 func (s *GameService) AuthenticateEntity(ctx context.Context, req *cultivation.AuthRequest) (*cultivation.AuthResponse, error) {
@@ -203,6 +267,7 @@ func (s *GameService) GetEntity(ctx context.Context, req *cultivation.EntityRequ
 
 	proto := entityToProto(entity)
 	s.populateSpellsAndItems(ctx, proto, entity.ID)
+	s.applyEquipmentBonuses(ctx, proto)
 
 	return &cultivation.EntityResponse{
 		Entity: proto,
@@ -219,6 +284,7 @@ func (s *GameService) SyncState(ctx context.Context, req *cultivation.SyncReques
 	proto := entityToProto(entity)
 	s.populateSpellsAndItems(ctx, proto, entity.ID)
 
+	s.applyEquipmentBonuses(ctx, proto)
 	return &cultivation.SyncResponse{
 		Entity:          proto,
 		WorldTime:       time.Now().Unix(),
@@ -282,6 +348,10 @@ func (s *GameService) populateSpellsAndItems(ctx context.Context, proto *cultiva
 					id.ItemType = string(inv.Item.Type)
 					id.Rarity = int32(inv.Item.Rarity)
 					id.Description = inv.Item.Description
+					if len(inv.Item.Attributes) > 0 {
+					attrBytes, _ := json.Marshal(inv.Item.Attributes)
+					id.AttributesJson = string(attrBytes)
+					}
 				}
 				proto.Items = append(proto.Items, id)
 			}
@@ -289,6 +359,38 @@ func (s *GameService) populateSpellsAndItems(ctx context.Context, proto *cultiva
 	}
 }
 
+	// applyEquipmentBonuses 将装备属性加成合并到角色面板显示（不持久化）
+func (s *GameService) applyEquipmentBonuses(ctx context.Context, proto *cultivation.Entity) {
+	if s.inventoryRepo == nil || proto == nil || proto.Attributes == nil {
+		return
+	}
+	equipped, err := s.inventoryRepo.GetEquippedItems(ctx, types.EntityID(proto.Id))
+	if err != nil || len(equipped) == 0 {
+		return
+	}
+	pa := proto.Attributes
+	for _, invItem := range equipped {
+		if invItem.Item == nil || invItem.Item.Attributes == nil {
+			continue
+		}
+		attrs := invItem.Item.Attributes
+		if v, ok := attrs["attack_power"].(float64); ok { pa.AttackPower += float64(v) }
+		if v, ok := attrs["defense"].(float64); ok { pa.Defense += float64(v) }
+		if v, ok := attrs["speed"].(float64); ok { pa.Speed += float64(v) }
+		if v, ok := attrs["max_qi"].(float64); ok { pa.MaxQi += float64(v) }
+		if v, ok := attrs["max_spiritual_power"].(float64); ok { pa.MaxSpiritualPower += float64(v) }
+		if v, ok := attrs["crit_rate"].(float64); ok { pa.CritRate += float64(v) }
+		if v, ok := attrs["crit_damage"].(float64); ok { pa.CritDamage += float64(v) }
+		if v, ok := attrs["dodge_rate"].(float64); ok { pa.DodgeRate += float64(v) }
+		if v, ok := attrs["hit_rate"].(float64); ok { pa.HitRate += float64(v) }
+		if v, ok := attrs["penetration"].(float64); ok { pa.Penetration += float64(v) }
+		if v, ok := attrs["damage_reduction"].(float64); ok { pa.DamageReduction += float64(v) }
+		if v, ok := attrs["divine_sense"].(float64); ok { pa.DivineSense += float64(v) }
+		if v, ok := attrs["comprehension"].(float64); ok { pa.Comprehension += int32(v) }
+		if v, ok := attrs["constitution"].(float64); ok { pa.Constitution += int32(v) }
+		if v, ok := attrs["luck"].(float64); ok { pa.Luck += int32(v) }
+	}
+}
 func entityToProto(e *types.Entity) *cultivation.Entity {
 	if e == nil {
 		return nil
@@ -341,6 +443,9 @@ func entityToProto(e *types.Entity) *cultivation.Entity {
 			RootPurity:          int32(e.Attributes.RootPurity),
 			PoisonLevel:         int32(e.Attributes.PoisonLevel),
 			CurseLevel:          int32(e.Attributes.CurseLevel),
+			SpiritualRoots: spiritualRootsToProto(e.Attributes.SpiritualRoots),
+			RootAwakened:        e.Attributes.RootAwakened,
+			MutatedRoot:         e.Attributes.MutatedRoot,
 		},
 		Karma: &cultivation.Karma{
 			KarmaValue:   int32(e.Karma.KarmaValue),
@@ -358,4 +463,18 @@ func entityToProto(e *types.Entity) *cultivation.Entity {
 		CreatedAt: e.CreatedAt.Unix(),
 		UpdatedAt: e.UpdatedAt.Unix(),
 	}
+}
+
+func spiritualRootsToProto(roots []types.SpiritualRoot) []*cultivation.SpiritualRoot {
+	if len(roots) == 0 {
+		return nil
+	}
+	result := make([]*cultivation.SpiritualRoot, 0, len(roots))
+	for _, r := range roots {
+		result = append(result, &cultivation.SpiritualRoot{
+			Element: r.Element,
+			Purity:  int32(r.Purity),
+		})
+	}
+	return result
 }

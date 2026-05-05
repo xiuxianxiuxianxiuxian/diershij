@@ -39,8 +39,14 @@ func (r *PostgresMessageRepository) Create(ctx context.Context, message *types.D
 		INSERT INTO messages (id, sender_id, receiver_id, type, content, is_read, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
+	// Use nil for receiver_id when empty (world/broadcast messages) to avoid UUID cast error
+	receiverID := interface{}(message.ReceiverID)
+	if message.ReceiverID == "" {
+		receiverID = nil
+	}
+
 	_, err := r.db.Pool().Exec(ctx, query,
-		message.ID, message.SenderID, message.ReceiverID, message.Type, message.Content, message.IsRead, time.Unix(message.CreatedAt, 0),
+		message.ID, message.SenderID, receiverID, message.Type, message.Content, message.IsRead, time.Unix(message.CreatedAt, 0),
 	)
 	return err
 }

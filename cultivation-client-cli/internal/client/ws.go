@@ -313,6 +313,15 @@ func formatEffects(effects map[string]interface{}) string {
 	if v, ok := effects["founder_name"].(string); ok {
 		parts = append(parts, fmt.Sprintf("宗主:%s", v))
 	}
+	if v, ok := effects["quality"].(string); ok {
+		parts = append(parts, fmt.Sprintf("品质:%s", v))
+	}
+	if v, ok := effects["element_affinity"].(string); ok && v != "" {
+		parts = append(parts, fmt.Sprintf("亲和:%s", v))
+	}
+	if v, ok := effects["cultivation_multiplier"].(float64); ok && v > 0 {
+		parts = append(parts, fmt.Sprintf("修炼倍率:%.1f", v))
+	}
 
 	result := ""
 	for i, p := range parts {
