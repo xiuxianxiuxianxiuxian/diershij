@@ -1,0 +1,26 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "!server/**/*.md"
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - gateway
+          - game-server
+          - heavenly-dao
+          - ai-scheduler
+          - world-engine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t cultivation-${{ matrix.service }} ./server/${{ matrix.service }}

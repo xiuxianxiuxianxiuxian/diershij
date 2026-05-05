@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, game-server, heavenly-dao, ai-scheduler, world-engine, shared]
+
+    defaults:
+      run:
+        working-directory: server/${{ matrix.service }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        if: ${{ matrix.service == 'heavenly-dao' || matrix.service == 'shared' }}
+        run: go test ./...
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: 123456
+          DB_NAME: cultivation_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379

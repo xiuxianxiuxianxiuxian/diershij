@@ -34,7 +34,7 @@ server/
   ai-scheduler/   — NPC AI via behavior trees and LLM (DeepSeek)
   world-engine/   — region management, resource spawning, events
   shared/         — shared types, config, protobuf definitions, errors
-  init-db/        — SQL schema and migrations (01-04 in order)
+  init-db/        — SQL schema and migrations (01-08 in order)
   config.json     — default server config
   docker-compose.yml — full orchestration
 
@@ -75,10 +75,14 @@ cd server/shared && go test ./types/...
 cd server/heavenly-dao && go test -v ./internal/service/...
 
 # Database migrations (run in order)
-psql -h localhost -U postgres -d cultivation -f server/init-db/01_init.sql
-psql -h localhost -U postgres -d cultivation -f server/init-db/02_game_operations.sql
-psql -h localhost -U postgres -d cultivation -f server/init-db/03_fix_missing.sql
-psql -h localhost -U postgres -d cultivation -f server/init-db/04_add_extra_attributes.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/01_init.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/02_game_operations.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/03_fix_missing.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/04_add_extra_attributes.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/05_friends.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/06_add_password_hash.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/07_add_name_unique.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/08_add_spiritual_roots_methods.sql
 
 # Windows: start/stop all backend services locally (double-click .bat or PowerShell)
 .\启动游戏.bat

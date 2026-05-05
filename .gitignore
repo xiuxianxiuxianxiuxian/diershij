@@ -1,0 +1,44 @@
+# Go binaries
+*.exe
+*.exe~
+*.test
+*.out
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CLI history
+.cli_history
+.cli_auth_history
+*/.cli_history
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Temp files
+*.tmp
+*.temp
+*.zip
+
+# Environment files
+.env
+.env.local
+
+# Test data
+debug-test
+test-build
+test-build2
+sidebar-fix
+sidebar-test
