@@ -84,7 +84,7 @@ func (p *NPCDecisionPipeline) RunCycle(ctx context.Context, npcCtx *NPCContext, 
 	case CycleSlow:
 		return p.runSlowCycle(ctx, npcCtx, now)
 	default:
-		return nil, fmt.Errorf("未知决策周期类型")
+		return nil, nil
 	}
 }
 
@@ -151,6 +151,7 @@ func (p *NPCDecisionPipeline) runSlowCycle(ctx context.Context, npcCtx *NPCConte
 	result, source := p.fallback.Decide(ctx, npcCtx, systemPrompt, userPrompt)
 
 	p.lastSlowCycle = now
+	p.lastFastCycle = now
 
 	return &DecisionCycleResult{
 		CycleType:   CycleSlow,

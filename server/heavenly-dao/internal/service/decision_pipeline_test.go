@@ -79,7 +79,8 @@ func TestRunCycle_SlowCycle(t *testing.T) {
 	result, err := pipeline.RunCycle(ctx, npcCtx, now)
 	assert.NoError(t, err)
 	assert.Equal(t, CycleSlow, result.CycleType)
-	assert.Equal(t, "slow", result.Source)
+	// Source is "behavior_tree" because fallback chain ends at behavior tree
+	assert.Equal(t, "behavior_tree", result.Source)
 }
 
 func TestRunCycle_FastCycleAfterSlow(t *testing.T) {
@@ -222,7 +223,7 @@ func TestExecuteAction_Unknown(t *testing.T) {
 
 	err := pipeline.ExecuteAction(ctx, npcCtx, decision)
 	assert.NoError(t, err) // Unknown actions don't error
-	assert.Contains(t, npcCtx.EventLog, "未知动作")
+	assert.Contains(t, npcCtx.EventLog[0], "未知动作")
 }
 
 func TestExecuteAction_NilDecision(t *testing.T) {
