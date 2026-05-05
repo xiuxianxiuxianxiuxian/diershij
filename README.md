@@ -1,156 +1,204 @@
-# 修仙世界 - 微服务架构
+# 修仙世界 — 微服务 MUD 修仙游戏
 
-完全自主演化的多人在线文字MUD修仙世界。
+完全自主演化的多人在线文字修仙世界（MUD）。五服微服务架构，支持 AI 驱动的 NPC 行为、动态世界事件、天道因果系统。
 
-## 项目结构
+## 技术栈
+
+- **后端**: Go 微服务（Go 1.21 / 1.25），gRPC 服务间通信，Gin HTTP 框架
+- **数据库**: PostgreSQL（pgxpool）+ Redis（go-redis）
+- **客户端**: 终端 CLI（主）+ Gio 桌面 GUI（保留）
+- **AI**: DeepSeek LLM 驱动 NPC 决策 + 行为树
+- **协议**: WebSocket JSON + Protocol Buffers（protoc v4.25.3）
+- **基础设施**: Docker Compose，GitHub Actions CI
+
+## 服务架构
 
 ```
-.
-├── server/                    # 服务端
-│   ├── shared/               # 共享库
-│   │   ├── types/           # 类型定义
-│   │   ├── config/          # 配置管理
-│   │   ├── errors/          # 错误处理
-│   │   └── proto/           # gRPC协议定义
-│   ├── gateway/              # API网关服务 (端口8080)
-│   ├── game-server/          # 游戏核心服务 (端口50051)
-│   ├── heavenly-dao/         # 天道引擎服务 (端口50052)
-│   ├── ai-scheduler/         # AI调度服务 (端口50053)
-│   ├── world-engine/         # 世界引擎服务 (端口50054)
-│   ├── init-db/              # 数据库初始化脚本
-│   └── docker-compose.yml    # Docker编排配置
-│
-└── client/                    # Tauri桌面客户端
-    ├── src/                   # React前端源码
-    │   ├── pages/            # 页面组件
-    │   ├── components/       # 通用组件
-    │   ├── stores/           # 状态管理
-    │   ├── services/         # API/WebSocket服务
-    │   └── types/            # TypeScript类型
-    └── src-tauri/            # Tauri后端
+┌─────────────────┐    HTTP/WS     ┌────────────┐
+│  CLI 客户端      │ ◄────────────►│  Gateway   │ :8080 / :8081
+│  Gio 桌面客户端  │               └─────┬──────┘
+└─────────────────┘                      │ gRPC
+                  ┌──────────────────────┼──────────────────────┐
+                  ▼                      ▼                      ▼
+            ┌──────────┐          ┌──────────┐          ┌──────────────┐
+            │  Game    │          │ Heavenly │          │     AI       │
+            │  Server  │◄────────►│   Dao    │          │  Scheduler   │
+            │  :50051  │  gRPC    │  :50053  │          │   :50052     │
+            └────┬─────┘          └──────────┘          └──────────────┘
+                 │                                         │ LLM
+                 ▼                                         ▼
+            ┌──────────┐                            ┌────────────┐
+            │  World   │                            │  DeepSeek  │
+            │  Engine  │ :50054                     │    API     │
+            └──────────┘                            └────────────┘
 ```
+
+### 服务职责
+
+| 服务 | 端口 | 职责 |
+|------|------|------|
+| **Gateway** | 8080 (HTTP/WS), 8081 | JWT 认证、WebSocket 连接管理、消息路由转发 |
+| **Game Server** | 50051 | 实体管理、31 种操作调度、状态同步、装备/物品/功法/好友 |
+| **Heavenly Dao** | 50053 | 天道引擎：修炼效率公式、突破概率、天劫判定、因果业力 |
+| **AI Scheduler** | 50052 | NPC 决策：行为树 + LLM 双循环、记忆系统、自主行为 |
+| **World Engine** | 50054 | 区域管理、资源刷新、世界事件调度 |
 
 ## 快速开始
 
 ### 环境要求
 
-- Go 1.21+
-- Node.js 18+
-- Rust (用于Tauri)
+- Go 1.21+（部分模块需要 1.25）
 - Docker & Docker Compose
+- PostgreSQL 15 / Redis 7（通过 Docker 启动）
 
-### 启动服务端
+### 一键启动（推荐）
 
 ```bash
 cd server
-
-# 启动数据库和服务
 docker-compose up -d
+```
 
-# 或本地开发模式
-# 1. 启动PostgreSQL和Redis
-docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cultivation postgres:15-alpine
+这会启动 PostgreSQL、Redis 和全部 5 个微服务。
+
+### 本地开发模式
+
+```bash
+# 1. 启动数据库
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=123456 -e POSTGRES_DB=cultivation postgres:15-alpine
 docker run -d --name redis -p 6379:6379 redis:7-alpine
 
-# 2. 初始化数据库
-psql -h localhost -U postgres -d cultivation -f init-db/01_init.sql
+# 2. 初始化数据库（按顺序执行）
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/01_init.sql
+PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/02_game_operations.sql
+# ... 依次执行 03-09 迁移文件
 
-# 3. 启动各服务
-cd game-server && go run ./cmd &
-cd heavenly-dao && go run ./cmd &
-cd ai-scheduler && go run ./cmd &
-cd world-engine && go run ./cmd &
-cd gateway && go run ./cmd &
+# 3. 分别启动各个服务
+cd server/game-server && go run ./cmd
+cd server/heavenly-dao && go run ./cmd
+cd server/ai-scheduler && go run ./cmd
+cd server/world-engine && go run ./cmd
+cd server/gateway && go run ./cmd
+```
+
+### Windows 快速启动
+
+```powershell
+# 编译并启动全部服务
+.\start-all.ps1 -rebuild
+
+# 停止全部服务
+.\stop-all.ps1
 ```
 
 ### 启动客户端
 
 ```bash
-cd client
+# CLI 客户端（主）
+cd cultivation-client-cli && go run ./cmd
 
-# 安装依赖
-npm install
-
-# 开发模式
-npm run dev
-
-# 或启动Tauri桌面应用
-npm run tauri dev
+# Gio 桌面客户端（保留）
+cd cultivation-client-go && go run ./cmd
 ```
 
-## 服务架构
+CLI 客户端支持 21+ 个命令：
+- `cult` / `cultivate` — 修炼
+- `bt` / `breakthrough` — 突破境界
+- `exp` / `explore` — 探索区域
+- `combat` / `skill` / `flee` — 战斗系统
+- `spell` / `cast_spell` — 法术系统
+- `move` / `gather` / `craft` — 生存
+- `chat` / `msg` — 社交
+- `friend` / `unfriend` / `accept` — 好友系统
+- `status` / `st` — 角色状态（灵根/装备/功法）
+- `create_sect` / `join_sect` / `leave_sect` — 宗门
+
+## 项目布局
 
 ```
-┌─────────────┐    WebSocket    ┌──────────┐
-│   Client    │ ◄──────────────►│ Gateway  │ :8080
-└─────────────┘                 └────┬─────┘
-                                     │ gRPC
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                ▼
-              ┌──────────┐    ┌──────────┐    ┌──────────┐
-              │  Game    │    │ Heavenly │    │    AI    │
-              │  Server  │    │   Dao    │    │Scheduler │
-              │  :50051  │    │  :50052  │    │  :50053  │
-              └────┬─────┘    └──────────┘    └──────────┘
-                   │
-                   ▼
-              ┌──────────┐
-              │  World   │
-              │  Engine  │ :50054
-              └──────────┘
+diershij/
+├── server/                        # 服务端
+│   ├── gateway/                   # API 网关
+│   ├── game-server/               # 游戏核心
+│   │   └── internal/
+│   │       ├── service/           # 操作调度（operation.go）
+│   │       └── repository/        # 持久化层
+│   ├── heavenly-dao/              # 天道引擎
+│   ├── ai-scheduler/              # AI NPC 调度
+│   ├── world-engine/              # 世界引擎
+│   ├── shared/                    # 共享库
+│   │   ├── types/                 # Go 类型定义
+│   │   ├── proto/                 # Protobuf 定义 + 生成代码
+│   │   ├── config/                # 配置管理
+│   │   └── errors/                # 错误定义
+│   ├── init-db/                   # SQL 迁移脚本（01-09）
+│   ├── docker-compose.yml
+│   └── config.json                # 默认配置
+├── cultivation-client-cli/        # 终端 CLI 客户端
+├── cultivation-client-go/         # Gio 桌面 GUI 客户端
+└── .github/workflows/             # CI 配置
 ```
 
-## 核心功能
+## WebSocket 协议
 
-### 服务端
-- **Gateway**: WebSocket接入、JWT认证、消息路由
-- **Game Server**: 实体管理、操作验证、状态同步
-- **Heavenly Dao**: 因果业力、天劫判定、世界平衡
-- **AI Scheduler**: NPC决策、行为树、LLM调用
-- **World Engine**: 区域管理、资源刷新、世界事件
+消息采用 JSON 信封格式：
 
-### 客户端
-- 现代单页应用风格UI
-- 多标签页切换（角色、世界、社交、战斗、设置）
-- 实时WebSocket通信
-- Zustand状态管理
+```json
+{"type": "operation", "payload": {"action_type": "cultivate", "params": {}}, "timestamp": 123}
+```
+
+**客户端 → 服务端**: `operation`（action_type + params）
+**服务端 → 客户端**: `op_result` / `state_sync` / `entity_update` / `world_event` / `chat` / `error`
+
+## 游戏系统
+
+### 境界体系
+
+凡人 → 练气 → 筑基 → 金丹 → 元婴 → 化神 → 炼虚 → 合体 → 大乘 → 渡劫
+
+### 灵根系统
+
+注册时随机生成 1-3 条灵根，5% 概率变异：
+- 基础元素: 金、木、水、火、土
+- 变异灵根: 风、雷、冰
+- 主灵根纯度 60-90，副灵根 20-50
+
+### 修炼公式
+
+修炼效率 = 基础速率 × 灵根加成 × 功法匹配 × 境界衰减 × 心境系数 × (1 - 衰老惩罚)
+
+### 突破公式
+
+突破概率 = 基准成功率 × 积累度 × 功法品质 × 资源加成 × 心境系数 × 运气，取值 [5%, 80%]
 
 ## 配置
 
-环境变量配置：
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| DB_HOST | localhost | PostgreSQL 地址 |
+| DB_PORT | 5432 | PostgreSQL 端口 |
+| DB_PASSWORD | postgres | 数据库密码 |
+| REDIS_HOST | localhost | Redis 地址 |
+| REDIS_PORT | 6379 | Redis 端口 |
+| JWT_SECRET | cultivation-jwt-secret-key-2024 | JWT 签名密钥 |
+| LLM_API_KEY | - | DeepSeek API 密钥（AI NPC） |
 
-```bash
-# 数据库
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=cultivation
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# JWT
-JWT_SECRET=your-secret-key
-
-# LLM (可选)
-LLM_PROVIDER=deepseek
-LLM_API_KEY=your-api-key
-```
+服务端运行配置见 `server/config.json`，也支持通过 `config.LoadConfigFromEnv()` 从环境变量加载。
 
 ## 开发状态
 
-- [x] 项目结构搭建
-- [x] 共享库基础类型
-- [x] Gateway服务框架
-- [x] Game Server服务框架
-- [x] Heavenly Dao服务框架
-- [x] AI Scheduler服务框架
-- [x] World Engine服务框架
-- [x] Docker Compose配置
-- [x] Tauri客户端框架
-- [x] 客户端核心页面
-- [ ] 完整业务逻辑实现
-- [ ] 单元测试
-- [ ] 集成测试
+- [x] 五服微服务架构搭建
+- [x] Gateway — JWT 认证 + WebSocket 路由
+- [x] Game Server — 31 种操作调度 + 实体管理
+- [x] Heavenly Dao — 修炼/突破/天劫/业力规则引擎
+- [x] AI Scheduler — 行为树 + LLM 决策流水线
+- [x] World Engine — 区域/资源/事件管理
+- [x] CLI 客户端 — 21+ 命令，完整交互
+- [x] 灵根系统 — 随机生成 + 纯度 + 变异
+- [x] 功法系统 — 学习/主修/品质影响突破
+- [x] 装备系统 — 13 项属性加成 + 耐久度
+- [x] 战斗系统 — NPC 掉落 + 法术 + 逃跑
+- [ ] 商店/交易系统
+- [ ] 世界事件系统
+- [ ] AI NPC 深度集成（DeepSeek）
+- [ ] 社交系统完善（邮件/排行榜）
+- [ ] Bubble Tea TUI 客户端（规划中）
