@@ -1,13 +1,15 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download
+COPY shared/go.mod shared/go.sum ./shared/
+COPY heavenly-dao/go.mod heavenly-dao/go.sum ./heavenly-dao/
+RUN cd heavenly-dao && go mod download
 
-COPY . .
+COPY shared/ ./shared/
+COPY heavenly-dao/ ./heavenly-dao/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o heavenly-dao ./cmd
+RUN cd heavenly-dao && CGO_ENABLED=0 GOOS=linux go build -o heavenly-dao ./cmd
 
 FROM alpine:latest
 
@@ -15,7 +17,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/heavenly-dao .
+COPY --from=builder /app/heavenly-dao/heavenly-dao .
 
 EXPOSE 50053
 

@@ -23,4 +23,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t cultivation-${{ matrix.service }} ./server/${{ matrix.service }}
+        run: docker build -t cultivation-${{ matrix.service }} -f ./server/${{ matrix.service }}/Dockerfile ./server/

@@ -34,8 +34,8 @@ services:
 
   gateway:
     build:
-      context: ./gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: gateway/Dockerfile
     container_name: cultivation-gateway
     ports:
       - "8080:8080"
@@ -74,8 +74,8 @@ services:
 
   game-server:
     build:
-      context: ./game-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: game-server/Dockerfile
     container_name: cultivation-game-server
     ports:
       - "50051:50051"
@@ -105,8 +105,8 @@ services:
 
   heavenly-dao:
     build:
-      context: ./heavenly-dao
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: heavenly-dao/Dockerfile
     container_name: cultivation-heavenly-dao
     ports:
       - "50053:50053"
@@ -116,8 +116,8 @@ services:
 
   ai-scheduler:
     build:
-      context: ./ai-scheduler
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ai-scheduler/Dockerfile
     container_name: cultivation-ai-scheduler
     ports:
       - "50052:50052"
@@ -130,8 +130,8 @@ services:
 
   world-engine:
     build:
-      context: ./world-engine
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: world-engine/Dockerfile
     container_name: cultivation-world-engine
     ports:
       - "50054:50054"

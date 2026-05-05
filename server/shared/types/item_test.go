@@ -41,24 +41,25 @@ func TestItemTemplateInitialization(t *testing.T) {
 
 func TestInventoryItemInitialization(t *testing.T) {
 	item := InventoryItem{
-		TemplateID: "item_001",
-		InstanceID: "inst_001",
-		Name:       "Spirit Gathering Pill",
-		Quantity:   10,
-		Slot:       0,
-		Quality:    85,
-		Bound:      false,
-		ExpiryTime: 0,
+		ID:       "inst_001",
+		ItemID:   "item_001",
+		Quantity: 10,
+		Bound:    false,
+		Item: &Item{
+			Name: "Spirit Gathering Pill",
+			ID:   "item_001",
+			Type: "pill",
+		},
 	}
 
-	if item.TemplateID != "item_001" {
-		t.Errorf("InventoryItem TemplateID mismatch")
+	if item.ItemID != "item_001" {
+		t.Errorf("InventoryItem ItemID mismatch")
 	}
 	if item.Quantity != 10 {
 		t.Errorf("InventoryItem Quantity mismatch, expected 10, got %d", item.Quantity)
 	}
-	if item.Quality != 85 {
-		t.Errorf("InventoryItem Quality mismatch, expected 85, got %d", item.Quality)
+	if item.Item.Name != "Spirit Gathering Pill" {
+		t.Errorf("InventoryItem Name mismatch, expected Spirit Gathering Pill, got %s", item.Item.Name)
 	}
 	if item.Bound != false {
 		t.Error("InventoryItem Bound should be false")
@@ -307,9 +308,9 @@ func TestEntityInventoryWithItems(t *testing.T) {
 	inventory := EntityInventory{
 		EntityID: "entity_001",
 		Items: []InventoryItem{
-			{TemplateID: "item_001", Name: "Pill A", Quantity: 5, Slot: 0, Quality: 80},
-			{TemplateID: "item_002", Name: "Pill B", Quantity: 10, Slot: 1, Quality: 75},
-			{TemplateID: "item_003", Name: "Sword", Quantity: 1, Slot: 2, Quality: 90, Bound: true},
+			{ID: "inst_001", ItemID: "item_001", Item: &Item{Name: "Pill A"}, Quantity: 5, Slot: "0"},
+			{ID: "inst_002", ItemID: "item_002", Item: &Item{Name: "Pill B"}, Quantity: 10, Slot: "1"},
+			{ID: "inst_003", ItemID: "item_003", Item: &Item{Name: "Sword"}, Quantity: 1, Slot: "2", Bound: true},
 		},
 		Capacity: 50,
 	}

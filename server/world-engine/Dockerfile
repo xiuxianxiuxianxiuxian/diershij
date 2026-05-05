@@ -1,13 +1,15 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download
+COPY shared/go.mod shared/go.sum ./shared/
+COPY world-engine/go.mod world-engine/go.sum ./world-engine/
+RUN cd world-engine && go mod download
 
-COPY . .
+COPY shared/ ./shared/
+COPY world-engine/ ./world-engine/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o world-engine ./cmd
+RUN cd world-engine && CGO_ENABLED=0 GOOS=linux go build -o world-engine ./cmd
 
 FROM alpine:latest
 
@@ -15,7 +17,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/world-engine .
+COPY --from=builder /app/world-engine/world-engine .
 
 EXPOSE 50054
 

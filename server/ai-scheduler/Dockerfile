@@ -1,13 +1,15 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download
+COPY shared/go.mod shared/go.sum ./shared/
+COPY ai-scheduler/go.mod ai-scheduler/go.sum ./ai-scheduler/
+RUN cd ai-scheduler && go mod download
 
-COPY . .
+COPY shared/ ./shared/
+COPY ai-scheduler/ ./ai-scheduler/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o ai-scheduler ./cmd
+RUN cd ai-scheduler && CGO_ENABLED=0 GOOS=linux go build -o ai-scheduler ./cmd
 
 FROM alpine:latest
 
@@ -15,7 +17,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/ai-scheduler .
+COPY --from=builder /app/ai-scheduler/ai-scheduler .
 
 EXPOSE 50052
 
