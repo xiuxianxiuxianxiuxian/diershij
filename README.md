@@ -6,8 +6,8 @@
 
 - **后端**: Go 微服务（Go 1.21 / 1.25），gRPC 服务间通信，Gin HTTP 框架
 - **数据库**: PostgreSQL（pgxpool）+ Redis（go-redis）
-- **客户端**: 终端 CLI（主）+ Gio 桌面 GUI（保留）
-- **AI**: DeepSeek LLM 驱动 NPC 决策 + 行为树
+- **客户端**: 终端 CLI（主）+ Bubble Tea TUI（新）+ Gio 桌面 GUI（保留）
+- **AI**: DeepSeek LLM 驱动 NPC 决策 + 行为树 + 记忆系统
 - **协议**: WebSocket JSON + Protocol Buffers（protoc v4.25.3）
 - **基础设施**: Docker Compose，GitHub Actions CI
 
@@ -38,10 +38,10 @@
 | 服务 | 端口 | 职责 |
 |------|------|------|
 | **Gateway** | 8080 (HTTP/WS), 8081 | JWT 认证、WebSocket 连接管理、消息路由转发 |
-| **Game Server** | 50051 | 实体管理、31 种操作调度、状态同步、装备/物品/功法/好友 |
+| **Game Server** | 50051 | 实体管理、31+ 种操作调度、状态同步、装备/物品/功法/好友/邮件/商店/排行榜 |
 | **Heavenly Dao** | 50053 | 天道引擎：修炼效率公式、突破概率、天劫判定、因果业力 |
-| **AI Scheduler** | 50052 | NPC 决策：行为树 + LLM 双循环、记忆系统、自主行为 |
-| **World Engine** | 50054 | 区域管理、资源刷新、世界事件调度 |
+| **AI Scheduler** | 50052 | NPC 决策：行为树 + LLM 双循环、记忆系统、NPC 个性、自主行为 |
+| **World Engine** | 50054 | 区域管理、资源刷新、世界事件、世界状态持久化 |
 
 ## 快速开始
 
@@ -70,7 +70,7 @@ docker run -d --name redis -p 6379:6379 redis:7-alpine
 # 2. 初始化数据库（按顺序执行）
 PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/01_init.sql
 PGPASSWORD=123456 psql -h localhost -U postgres -d cultivation -f server/init-db/02_game_operations.sql
-# ... 依次执行 03-09 迁移文件
+# ... 依次执行 03-99 迁移文件（含邮件、商店、NPC、世界状态等）
 
 # 3. 分别启动各个服务
 cd server/game-server && go run ./cmd
@@ -95,6 +95,9 @@ cd server/gateway && go run ./cmd
 ```bash
 # CLI 客户端（主）
 cd cultivation-client-cli && go run ./cmd
+
+# Bubble Tea TUI 客户端（新）
+cd cultivation-bubbletea && go run ./cmd
 
 # Gio 桌面客户端（保留）
 cd cultivation-client-go && go run ./cmd
@@ -130,10 +133,12 @@ diershij/
 │   │   ├── proto/                 # Protobuf 定义 + 生成代码
 │   │   ├── config/                # 配置管理
 │   │   └── errors/                # 错误定义
-│   ├── init-db/                   # SQL 迁移脚本（01-09）
+│   ├── init-db/                   # SQL 迁移脚本（01-99）
+│   ├── test_workflows.py          # 集成测试脚本
 │   ├── docker-compose.yml
 │   └── config.json                # 默认配置
 ├── cultivation-client-cli/        # 终端 CLI 客户端
+├── cultivation-bubbletea/         # Bubble Tea TUI 客户端
 ├── cultivation-client-go/         # Gio 桌面 GUI 客户端
 └── .github/workflows/             # CI 配置
 ```
@@ -170,6 +175,26 @@ diershij/
 
 突破概率 = 基准成功率 × 积累度 × 功法品质 × 资源加成 × 心境系数 × 运气，取值 [5%, 80%]
 
+### 邮件系统
+
+玩家间离线消息、系统通知。支持发送、收取、邮件列表，自动清理过期邮件。
+
+### 商店系统
+
+NPC 商店交易，支持物品买卖、货币结算。通过 `trade` 命令交互。
+
+### 排行榜
+
+全服玩家境界、战力等排行，定期更新。
+
+### NPC 系统
+
+AI Scheduler 驱动的 NPC 行为引擎：
+- 行为树 + LLM 双循环决策
+- NPC 个性系统（personality traits）
+- 记忆系统（长期/短期记忆）
+- 自主行为（探索、修炼、社交、战斗）
+
 ## 配置
 
 | 环境变量 | 默认值 | 说明 |
@@ -197,8 +222,9 @@ diershij/
 - [x] 功法系统 — 学习/主修/品质影响突破
 - [x] 装备系统 — 13 项属性加成 + 耐久度
 - [x] 战斗系统 — NPC 掉落 + 法术 + 逃跑
-- [ ] 商店/交易系统
-- [ ] 世界事件系统
-- [ ] AI NPC 深度集成（DeepSeek）
-- [ ] 社交系统完善（邮件/排行榜）
-- [ ] Bubble Tea TUI 客户端（规划中）
+- [x] 商店/交易系统 — NPC 交易、货币结算
+- [x] 邮件系统 — 离线消息、系统通知
+- [x] 排行榜 — 境界/战力全服排行
+- [ ] 世界事件系统 — 天材地宝出世、妖兽潮
+- [ ] 跨服组队副本
+- [ ] 宗门战/领地争夺
