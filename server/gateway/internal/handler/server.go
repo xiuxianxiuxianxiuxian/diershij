@@ -145,13 +145,19 @@ func (s *Server) handleWebSocket(c *gin.Context) {
         return
     }
 
-    client := NewWebSocketClient(entityID, conn, s.wsHub, s.gameClient)
-    s.wsHub.Register(client)
-
-    // 发送初始状态同步（含法术和物品数据）
+    // 获取实体信息（用于名称等）
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     entity, spells, items, err := s.gameClient.GetEntityExtras(ctx, entityID)
     cancel()
+
+    entityName := ""
+    if err == nil && entity != nil {
+        entityName = entity.Name
+    }
+
+    client := NewWebSocketClient(entityID, entityName, conn, s.wsHub, s.gameClient)
+    s.wsHub.Register(client)
+
     if err == nil && entity != nil {
         payload := map[string]interface{}{
             "entity":    entity,

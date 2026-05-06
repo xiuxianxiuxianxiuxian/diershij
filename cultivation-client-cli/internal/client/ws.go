@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -207,9 +208,95 @@ func formatOpResult(payload map[string]interface{}) string {
 	if !success {
 		tag = "失败"
 	}
+
+	effects, _ := payload["effects"].(map[string]interface{})
+
+	// 排行榜 entries 多行显示
+	if effects != nil {
+		if entries, ok := effects["entries"].([]interface{}); ok && len(entries) > 0 {
+			title := message
+			s := fmt.Sprintf("[%s] %s\n", tag, title)
+			s += strings.Repeat("─", 60) + "\n"
+			s += fmt.Sprintf("  %-4s %-20s %-10s %s\n", "排名", "名称", "数值", "境界")
+			s += strings.Repeat("─", 60) + "\n"
+			for _, e := range entries {
+				em, ok := e.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				rank := getIntDef(em, "rank")
+				name := getStr(em, "name")
+				val := getFloatDef(em, "value")
+				realm := getStr(em, "realm")
+				s += fmt.Sprintf("  #%-3d %-20s %-10.1f %s\n", rank, name, val, realmDisplay(realm))
+			}
+			s += strings.Repeat("─", 60)
+			return s
+		}
+
+		// 邮件列表多行显示
+		if mails, ok := effects["mails"].([]interface{}); ok && len(mails) > 0 {
+			s := fmt.Sprintf("[%s] %s\n", tag, message)
+			s += strings.Repeat("─", 60) + "\n"
+			for _, m := range mails {
+				mm, ok := m.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				mid := getStr(mm, "id")
+				title := getStr(mm, "title")
+				sender := getStr(mm, "sender_name")
+				isRead := false
+				if r, ok := mm["is_read"].(bool); ok {
+					isRead = r
+				}
+				hasAtt := false
+				if a, ok := mm["has_attachment"].(bool); ok {
+					hasAtt = a
+				}
+				status := ""
+				if !isRead {
+					status += "[未读]"
+				}
+				if hasAtt {
+					status += "[附件]"
+				}
+				shortID := mid
+				if len(shortID) > 8 {
+					shortID = shortID[:8]
+				}
+				s += fmt.Sprintf("  %s %-8s %s (%s)%s\n", status, shortID, title, sender,
+					map[bool]string{true: " ✔已领", false: ""}[getBoolDef(mm, "is_claimed")])
+			}
+			s += strings.Repeat("─", 60) + fmt.Sprintf("\n 共 %d 封", len(mails))
+			return s
+		}
+
+		// 附近玩家 list
+		if players, ok := effects["players"].([]interface{}); ok && len(players) > 0 {
+			s := fmt.Sprintf("[%s] %s\n", tag, message)
+			s += strings.Repeat("─", 50) + "\n"
+			s += fmt.Sprintf("  %-20s %-15s %s\n", "名称", "境界", "神识")
+			s += strings.Repeat("─", 50) + "\n"
+			for _, p := range players {
+				pm, ok := p.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name := getStr(pm, "name")
+				realm := getStr(pm, "realm")
+				spirit := getFloatDef(pm, "spirit")
+				maxSp := getFloatDef(pm, "max_spirit")
+				s += fmt.Sprintf("  %-20s %-15s %.0f/%.0f\n", name, realmDisplay(realm), spirit, maxSp)
+			}
+			s += strings.Repeat("─", 50) + fmt.Sprintf("\n 共 %d 人在此区域", len(players))
+			return s
+		}
+	}
+
 	s := fmt.Sprintf("[%s] %s", tag, message)
 
-	if effects, ok := payload["effects"].(map[string]interface{}); ok && len(effects) > 0 {
+	if effects != nil && len(effects) > 0 {
 		details := formatEffects(effects)
 		if details != "" {
 			s += " | " + details
@@ -225,6 +312,13 @@ func formatOpResult(payload map[string]interface{}) string {
 		}
 	}
 	return s
+}
+
+func getBoolDef(m map[string]interface{}, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
 }
 
 func formatEffects(effects map[string]interface{}) string {
@@ -446,7 +540,39 @@ func getFloat(m map[string]interface{}, key string) (float64, bool) {
 	return 0, false
 }
 
-func getInt64(m map[string]interface{}, key string) (int64, bool) {
+func getInt(m map[string]interface{}, key string) (int, bool) {
+		v, ok := m[key]
+		if !ok {
+			return 0, false
+		}
+		switch n := v.(type) {
+		case float64:
+			return int(n), true
+		case int:
+			return n, true
+		case int64:
+			return int(n), true
+		}
+		return 0, false
+	}
+
+	func getIntDef(m map[string]interface{}, key string) int {
+		v, ok := getInt(m, key)
+		if !ok {
+			return 0
+		}
+		return v
+	}
+
+	func getFloatDef(m map[string]interface{}, key string) float64 {
+		v, ok := getFloat(m, key)
+		if !ok {
+			return 0
+		}
+		return v
+	}
+
+	func getInt64(m map[string]interface{}, key string) (int64, bool) {
 	v, ok := m[key]
 	if !ok {
 		return 0, false

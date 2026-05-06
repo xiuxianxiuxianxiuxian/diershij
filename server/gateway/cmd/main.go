@@ -4,6 +4,7 @@ import (
     "fmt"
     "log"
     "os"
+    "time"
 
     "github.com/cultivation-world/gateway/internal/handler"
     "github.com/cultivation-world/gateway/internal/service"
@@ -22,8 +23,18 @@ func main() {
     }
     defer gameClient.Close()
 
-    wsHub := handler.NewWebSocketHub()
+    worldClient, err := service.NewWorldEventClient(
+        getEnv("WORLD_ENGINE_HOST", "localhost"),
+        getEnvInt("WORLD_ENGINE_PORT", 50054),
+    )
+    if err != nil {
+        log.Fatalf("Failed to connect to world engine: %v", err)
+    }
+    defer worldClient.Close()
+
+    wsHub := handler.NewWebSocketHub(worldClient)
     go wsHub.Run()
+    wsHub.StartWorldEventPolling(30 * time.Second)
 
     authSvc := service.NewAuthService(
         getEnv("JWT_SECRET", "cultivation-secret-key"),

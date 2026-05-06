@@ -24,6 +24,8 @@ type OperationService struct {
 	recipeRepo    RecipeRepository
 	friendRepo    FriendRepository
 	methodRepo    MethodRepository
+	shopRepo      ShopRepository
+	mailRepo      MailRepository
 }
 
 type EntityRepository interface {
@@ -38,6 +40,7 @@ type EntityRepository interface {
 	GetPasswordHash(ctx context.Context, entityID types.EntityID) (string, error)
 	UpdateSpiritualRoots(ctx context.Context, entityID types.EntityID, roots []types.SpiritualRoot) error
 	GetSpiritualRoots(ctx context.Context, entityID types.EntityID) ([]types.SpiritualRoot, error)
+	GetNPCsByRegion(ctx context.Context, regionID string) ([]*types.Entity, error)
 }
 
 type ItemRepository interface {
@@ -72,6 +75,24 @@ type MessageRepository interface {
 type WorldServiceClient interface {
 	GetRegion(ctx context.Context, regionID string) (*types.Region, error)
 	SpawnResources(ctx context.Context, regionID string) error
+	GetEventModifiers(ctx context.Context, regionID string) (*EventModifiers, error)
+}
+
+type EventModifiers struct {
+	CultivationMultiplier float64
+	CombatProbability     float64
+	ExplorationBonus      float64
+	ResourceRespawnBonus  float64
+	TribulationModifier   float64
+	ActiveEvents          []EventInfo
+}
+
+type EventInfo struct {
+	Type        string
+	Name        string
+	Description string
+	RegionID    string
+	EndTime     int64
 }
 
 type SectInfo struct {
@@ -162,6 +183,57 @@ type MethodRepository interface {
 	GetMainMethod(ctx context.Context, entityID types.EntityID) (*EntityMethodInfo, error)
 }
 
+type ShopRepository interface {
+	GetShopByID(ctx context.Context, shopID string) (*ShopRInfo, error)
+	ListShopsByRegion(ctx context.Context, regionID string) ([]*ShopRInfo, error)
+	GetShopInventory(ctx context.Context, shopID string) ([]*ShopItemInfo, error)
+	GetShopItemByName(ctx context.Context, shopID string, itemName string) (*ShopItemInfo, error)
+	DecrementShopStock(ctx context.Context, shopID string, itemName string, quantity int) error
+	CreateAuction(ctx context.Context, sellerID, itemID, itemName string, quantity int, price, deposit int64) (string, error)
+	GetAuctionByID(ctx context.Context, auctionID string) (*AuctionInfo, error)
+	ListActiveAuctions(ctx context.Context) ([]*AuctionInfo, error)
+	BuyAuction(ctx context.Context, auctionID string, buyerID string) error
+	CancelAuction(ctx context.Context, auctionID string, sellerID string) error
+}
+
+type ShopRInfo struct {
+	ID          string
+	Name        string
+	Description string
+	RegionID    string
+	ShopType    string
+	NPCOwner    string
+	MarkupRate  float64
+	BuyRate     float64
+}
+
+type ShopItemInfo struct {
+	ID           string
+	ShopID       string
+	ItemName     string
+	ItemType     string
+	Rarity       int
+	Price        int64
+	Quantity     int
+	RefreshHours int
+	MinRealm     string
+}
+
+type AuctionInfo struct {
+	ID        string
+	SellerID  string
+	ItemID    string
+	ItemName  string
+	Quantity  int
+	Price     int64
+	Deposit   int64
+	Status    string
+	CreatedAt int64
+	ExpiresAt int64
+	BuyerID   string
+	SoldAt    int64
+}
+
 type FriendRequestInfo struct {
 	ID     string
 	FromID string
@@ -181,6 +253,8 @@ func NewOperationService(
 	recipeRepo RecipeRepository,
 	friendRepo FriendRepository,
 	methodRepo MethodRepository,
+	shopRepo ShopRepository,
+	mailRepo MailRepository,
 ) *OperationService {
 	return &OperationService{
 		entityRepo:    entityRepo,
@@ -194,6 +268,8 @@ func NewOperationService(
 		recipeRepo:    recipeRepo,
 		friendRepo:    friendRepo,
 		methodRepo:    methodRepo,
+		shopRepo:      shopRepo,
+		mailRepo:      mailRepo,
 	}
 }
 
@@ -270,6 +346,38 @@ func (s *OperationService) Execute(ctx context.Context, op *types.Operation) (*t
 		return s.executeSetMainMethod(ctx, entity, op)
 	case types.ActionListMethods:
 		return s.executeListMethods(ctx, entity, op)
+	case types.ActionBuy:
+		return s.executeBuy(ctx, entity, op)
+	case types.ActionSell:
+		return s.executeSell(ctx, entity, op)
+	case types.ActionShopList:
+		return s.executeShopList(ctx, entity, op)
+	case types.ActionShopItems:
+		return s.executeShopItems(ctx, entity, op)
+	case types.ActionAuctionList:
+		return s.executeAuctionList(ctx, entity, op)
+	case types.ActionAuctionBuy:
+		return s.executeAuctionBuy(ctx, entity, op)
+	case types.ActionAuctionCancel:
+		return s.executeAuctionCancel(ctx, entity, op)
+	case types.ActionAuctionView:
+		return s.executeAuctionView(ctx, entity, op)
+	case types.ActionMailList:
+		return s.executeMailList(ctx, entity, op)
+	case types.ActionMailRead:
+		return s.executeMailRead(ctx, entity, op)
+	case types.ActionMailClaim:
+		return s.executeMailClaim(ctx, entity, op)
+	case types.ActionMailDelete:
+		return s.executeMailDelete(ctx, entity, op)
+	case types.ActionLeaderboard:
+		return s.executeLeaderboard(ctx, entity, op)
+	case types.ActionNearbyPlayers:
+		return s.executeNearbyPlayers(ctx, entity, op)
+	case types.ActionWorldEvents:
+		return s.executeWorldEvents(ctx, entity, op)
+	case types.ActionAutoCombat:
+		return s.executeAutoCombat(ctx, entity, op)
 	default:
 		return nil, errors.ErrInvalidOperationType
 	}
@@ -284,6 +392,45 @@ func (s *OperationService) modifyKarma(ctx context.Context, entityID types.Entit
 	entity.Karma.KarmaValue += delta
 	s.entityRepo.UpdateKarma(ctx, entityID, &entity.Karma)
 }
+// executeWorldEvents 查询当前活跃的世界事件
+func (s *OperationService) executeWorldEvents(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	mods := s.getEventModifiers(ctx, entity.Position.RegionID)
+	events := make([]map[string]interface{}, 0)
+	for _, e := range mods.ActiveEvents {
+		events = append(events, map[string]interface{}{
+			"type":        e.Type,
+			"name":        e.Name,
+			"description": e.Description,
+			"region_id":   e.RegionID,
+			"end_time":    e.EndTime,
+		})
+	}
+	return &types.OperationResult{
+		Success: true,
+		Message: fmt.Sprintf("当前活跃事件: %d 个", len(events)),
+		Effects: map[string]interface{}{
+			"events":     events,
+			"count":      len(events),
+			"multiplier": mods.CultivationMultiplier,
+		},
+	}, nil
+}
+
+// getEventModifiers 获取当前区域的事件修正
+func (s *OperationService) getEventModifiers(ctx context.Context, regionID string) *EventModifiers {
+	if s.worldService == nil {
+		return &EventModifiers{CultivationMultiplier: 1.0}
+	}
+	mods, err := s.worldService.GetEventModifiers(ctx, regionID)
+	if err != nil || mods == nil {
+		return &EventModifiers{CultivationMultiplier: 1.0}
+	}
+	if mods.CultivationMultiplier <= 0 {
+		mods.CultivationMultiplier = 1.0
+	}
+	return mods
+}
+
 
 // 修炼（使用 heavenly-dao 效率计算）
 func (s *OperationService) executeCultivate(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
@@ -292,6 +439,7 @@ func (s *OperationService) executeCultivate(ctx context.Context, entity *types.E
 		attr = &types.Attributes{}
 	}
 
+	mods := s.getEventModifiers(ctx, entity.Position.RegionID)
 	cultivationGain := 0.1 * float64(attr.Comprehension) / 100.0
 
 	// 尝试调用 heavenly-dao 获取修炼效率
@@ -309,14 +457,12 @@ func (s *OperationService) executeCultivate(ctx context.Context, entity *types.E
 		daoResult, err := s.daoService.ExecuteCultivate(ctx, daoInput)
 		if err == nil && daoResult != nil && daoResult.Success {
 			cultivationGain = daoResult.CultivationGained
-			attr.CultivationProgress += cultivationGain
-		} else {
-			// heavenly-dao 不可用时使用简化计算
-			attr.CultivationProgress += cultivationGain
 		}
-	} else {
-		attr.CultivationProgress += cultivationGain
 	}
+
+	// 应用世界事件修正
+	cultivationGain *= mods.CultivationMultiplier
+	attr.CultivationProgress += cultivationGain
 
 	if attr.CultivationProgress > 100 {
 		attr.CultivationProgress = 100
@@ -338,6 +484,7 @@ func (s *OperationService) executeCultivate(ctx context.Context, entity *types.E
 		Effects: map[string]interface{}{
 			"cultivation_gain": cultivationGain,
 			"progress":         attr.CultivationProgress,
+			"event_multiplier": mods.CultivationMultiplier,
 		},
 	}, nil
 }
@@ -489,6 +636,8 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 		}
 	}
 
+	mods := s.getEventModifiers(ctx, entity.Position.RegionID)
+
 	// 使用 heavenly-dao 完整突破系统
 	if s.daoService != nil {
 		daoInput := &BreakthroughInput{
@@ -526,10 +675,11 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 				Success: false,
 				Message: daoResult.Message,
 				Effects: map[string]interface{}{
-					"success_rate":       daoResult.SuccessRate,
-					"progress_loss":      progressLoss,
-					"mental_damage":      daoResult.PenaltyMentalDamage,
-					"cooldown_hours":     daoResult.PenaltyCooldownHours,
+					"success_rate":         daoResult.SuccessRate,
+					"progress_loss":        progressLoss,
+					"mental_damage":        daoResult.PenaltyMentalDamage,
+					"cooldown_hours":       daoResult.PenaltyCooldownHours,
+					"tribulation_modifier": mods.TribulationModifier,
 				},
 			}, nil
 		}
@@ -540,9 +690,10 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 				Success: false,
 				Message: fmt.Sprintf("天劫降临！强度: %.1f, 类型: %s, 突破失败", daoResult.TribulationStrength, daoResult.TribulationType),
 				Effects: map[string]interface{}{
-					"tribulation":        true,
+					"tribulation":          true,
 					"tribulation_strength": daoResult.TribulationStrength,
-					"tribulation_type":   daoResult.TribulationType,
+					"tribulation_type":     daoResult.TribulationType,
+					"tribulation_modifier": mods.TribulationModifier,
 				},
 			}, nil
 		}
@@ -563,10 +714,11 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 			Success: true,
 			Message: daoResult.Message,
 			Effects: map[string]interface{}{
-				"new_realm":           daoResult.NewRealm,
-				"success_rate":        daoResult.SuccessRate,
-				"max_qi":              attr.MaxQi,
-				"max_spiritual":       attr.MaxSpiritualPower,
+				"new_realm":             daoResult.NewRealm,
+				"success_rate":          daoResult.SuccessRate,
+				"max_qi":                attr.MaxQi,
+				"max_spiritual":         attr.MaxSpiritualPower,
+				"tribulation_modifier":  mods.TribulationModifier,
 				"tribulation_triggered": daoResult.TribulationTriggered,
 			},
 		}, nil
@@ -574,6 +726,7 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 
 	// fallback: daoService 不可用时的简化突破
 	successRate := 0.5 + float64(attr.Luck)/200.0
+	successRate *= mods.TribulationModifier
 	if successRate > 0.8 {
 		successRate = 0.8
 	}
@@ -585,7 +738,8 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 			Success: false,
 			Message: "突破失败，修为尽失！",
 			Effects: map[string]interface{}{
-				"success_rate": successRate,
+				"success_rate":         successRate,
+				"tribulation_modifier": mods.TribulationModifier,
 			},
 		}, nil
 	}
@@ -605,10 +759,11 @@ func (s *OperationService) executeBreakthrough(ctx context.Context, entity *type
 		Success: true,
 		Message: "突破成功！境界提升至" + string(newRealm),
 		Effects: map[string]interface{}{
-			"new_realm":     newRealm,
-			"success_rate":  successRate,
-			"max_qi":        attr.MaxQi,
-			"max_spiritual": attr.MaxSpiritualPower,
+			"new_realm":             newRealm,
+			"success_rate":          successRate,
+			"max_qi":                attr.MaxQi,
+			"max_spiritual":         attr.MaxSpiritualPower,
+			"tribulation_modifier":  mods.TribulationModifier,
 		},
 	}, nil
 }
@@ -721,6 +876,7 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 	// 获取属性
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
 	targetAttr, _ := s.entityRepo.GetAttributes(ctx, target.ID)
+	mods := s.getEventModifiers(ctx, entity.Position.RegionID)
 
 	// 应用完整装备属性加成
 	bonuses := s.GetEquipmentBonuses(ctx, entity.ID)
@@ -793,10 +949,13 @@ func (s *OperationService) executeCombat(ctx context.Context, entity *types.Enti
 		Success: true,
 		Message: result.Message,
 		Effects: map[string]interface{}{
-			"damage_dealt":  result.DamageDealt,
-			"is_crit":       result.IsCrit,
-			"is_dodge":      result.IsDodge,
-			"target_status": target.Status,
+			"damage_dealt":      result.DamageDealt,
+			"is_crit":           result.IsCrit,
+			"is_dodge":          result.IsDodge,
+			"target_status":     target.Status,
+			"event_modifiers": map[string]float64{
+				"combat_probability": mods.CombatProbability,
+			},
 		},
 	}, nil
 }
@@ -807,6 +966,43 @@ type CombatResult struct {
 	IsDodge     bool
 	Killed      bool
 	Message     string
+}
+
+
+func (s *OperationService) executeAutoCombat(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	// 查找同一区域的NPC
+	npcs, err := s.entityRepo.GetNPCsByRegion(ctx, entity.Position.RegionID)
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "查询NPC失败")
+	}
+
+	// 过滤存活NPC
+	var alive []*types.Entity
+	for _, npc := range npcs {
+		if npc.Status != types.StatusDead {
+			alive = append(alive, npc)
+		}
+	}
+	if len(alive) == 0 {
+		return &types.OperationResult{
+			Success: false,
+			Message: "附近没有可战斗的目标",
+			Effects: map[string]interface{}{},
+		}, nil
+	}
+
+	// 随机选择一个目标
+	target := alive[rand.Intn(len(alive))]
+
+	// 构建战斗操作参数
+	combatOp := &types.Operation{
+		ActorID:    entity.ID,
+		ActionType: types.ActionCombat,
+		Params:     map[string]interface{}{"target_id": string(target.ID)},
+	}
+
+	// 复用战斗逻辑
+	return s.executeCombat(ctx, entity, combatOp)
 }
 
 func (s *OperationService) calculateCombat(attacker, defender *types.Attributes) CombatResult {
@@ -917,6 +1113,7 @@ func (s *OperationService) handleNPCDrops(ctx context.Context, entityID types.En
 // 探索
 func (s *OperationService) executeExplore(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	attr, _ := s.entityRepo.GetAttributes(ctx, entity.ID)
+	mods := s.getEventModifiers(ctx, entity.Position.RegionID)
 
 	// 获取区域信息
 	region, err := s.worldService.GetRegion(ctx, entity.Position.RegionID)
@@ -933,6 +1130,7 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 
 	// 探索成功率
 	successRate := 0.3 + float64(region.SpiritualDensity)/200.0
+	successRate *= (1 + mods.ExplorationBonus)
 	if rand.Float64() > successRate {
 		s.entityRepo.UpdateAttributes(ctx, entity.ID, attr)
 		return &types.OperationResult{
@@ -969,8 +1167,9 @@ func (s *OperationService) executeExplore(ctx context.Context, entity *types.Ent
 		Success: true,
 		Message: "探索成功！",
 		Effects: map[string]interface{}{
-			"qi_cost":     qiCost,
-			"discoveries": discoveries,
+			"qi_cost":           qiCost,
+			"discoveries":       discoveries,
+			"event_bonus":       mods.ExplorationBonus,
 		},
 	}, nil
 }
@@ -1336,17 +1535,26 @@ func (s *OperationService) executeSendMessage(ctx context.Context, entity *types
 		return nil, err
 	}
 
+	effects := map[string]interface{}{
+		"message_id":  message.ID,
+		"type":        msgType,
+		"sender_name": entity.Name,
+		"sender_id":   string(entity.ID),
+		"content":     content,
+		"timestamp":   message.CreatedAt,
+	}
+
+	// 世界频道消息标记广播
+	if msgType == "world" || msgType == "broadcast" {
+		effects["broadcast"] = true
+	}
+
 	return &types.OperationResult{
 		Success: true,
 		Message: "消息发送成功！",
-		Effects: map[string]interface{}{
-			"message_id": message.ID,
-			"type":       msgType,
-		},
+		Effects: effects,
 	}, nil
 }
-
-// 施法（含装备/灵根加成 + 实际伤害目标）
 func (s *OperationService) executeCastSpell(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
 	spellID, ok := op.Params["spell_id"].(string)
 	if !ok {
@@ -2265,9 +2473,64 @@ func getRealmLifespan(realm types.CultivationRealm) int {
 	return lifespans[realm]
 }
 
+// executeNearbyPlayers 附近玩家查询
+func (s *OperationService) executeNearbyPlayers(ctx context.Context, entity *types.Entity, op *types.Operation) (*types.OperationResult, error) {
+	regionID := entity.Position.RegionID
+	if regionID == "" {
+		if r, ok := op.Params["region_id"].(string); ok {
+			regionID = r
+		}
+	}
+
+	entities, err := s.getPlayersByRegion(ctx, regionID)
+	if err != nil {
+		return nil, errors.NewGameError(errors.ErrInternalError, "附近玩家查询失败")
+	}
+
+	players := make([]map[string]interface{}, 0, len(entities))
+	for _, e := range entities {
+		if e.ID == entity.ID {
+			continue
+		}
+		spiritPower := 0.0
+		maxSpiritPower := 0.0
+		if attr, _ := s.entityRepo.GetAttributes(ctx, e.ID); attr != nil {
+			spiritPower = attr.SpiritualPower
+			maxSpiritPower = attr.MaxSpiritualPower
+		}
+		players = append(players, map[string]interface{}{
+			"name":       e.Name,
+			"realm":      string(e.Realm),
+			"spirit":     spiritPower,
+			"max_spirit": maxSpiritPower,
+		})
+	}
+
+	return &types.OperationResult{
+		Success: true,
+		Message: "附近玩家查询成功",
+		Effects: map[string]interface{}{
+			"players": players,
+			"count":   len(players),
+			"region":  regionID,
+		},
+	}, nil
+}
+
+// getPlayersByRegion 通过区域ID获取玩家列表（使用接口断言）
+func (s *OperationService) getPlayersByRegion(ctx context.Context, regionID string) ([]*types.Entity, error) {
+	if lister, ok := s.entityRepo.(interface {
+		GetByRegion(ctx context.Context, regionID string) ([]*types.Entity, error)
+	}); ok {
+		return lister.GetByRegion(ctx, regionID)
+	}
+	return nil, nil
+}
+
 func generateMessageID() string {
 	id := string(types.GenerateEntityID())
 	// Format as UUID: 8-4-4-4-12
 	return fmt.Sprintf("%s-%s-%s-%s-%s",
 		id[0:8], id[8:12], id[12:16], id[16:20], id[20:32])
 }
+

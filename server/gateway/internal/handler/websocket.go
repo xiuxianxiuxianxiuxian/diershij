@@ -1,6 +1,7 @@
 package handler
 
 import (
+    "context"
     "encoding/json"
     "log"
     "sync"
@@ -18,6 +19,8 @@ type WebSocketHub struct {
     register   chan *WebSocketClient
     unregister chan *WebSocketClient
     mu         sync.RWMutex
+
+    worldClient *service.WorldEventClient
 }
 
 type BroadcastMessage struct {
@@ -25,13 +28,14 @@ type BroadcastMessage struct {
     Message  types.Message
 }
 
-func NewWebSocketHub() *WebSocketHub {
+func NewWebSocketHub(worldClient *service.WorldEventClient) *WebSocketHub {
     return &WebSocketHub{
         clients:    make(map[*WebSocketClient]bool),
         entityMap:  make(map[types.EntityID]*WebSocketClient),
         broadcast:  make(chan *BroadcastMessage, 256),
         register:   make(chan *WebSocketClient),
         unregister: make(chan *WebSocketClient),
+        worldClient: worldClient,
     }
 }
 
@@ -103,15 +107,70 @@ const (
 
 type WebSocketClient struct {
     entityID   types.EntityID
+    name       string
     conn       *websocket.Conn
     send       chan types.Message
     hub        *WebSocketHub
     gameClient *service.GameServiceClient
 }
 
-func NewWebSocketClient(entityID types.EntityID, conn *websocket.Conn, hub *WebSocketHub, gameClient *service.GameServiceClient) *WebSocketClient {
+func (h *WebSocketHub) StartWorldEventPolling(interval time.Duration) {
+    if h.worldClient == nil {
+        return
+    }
+    go func() {
+        ticker := time.NewTicker(interval)
+        defer ticker.Stop()
+        // 记录已通知的事件ID，避免重复广播
+        notifiedEvents := make(map[string]bool)
+        for range ticker.C {
+            ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+            state, err := h.worldClient.GetWorldState(ctx)
+            cancel()
+            if err != nil || state == nil {
+                continue
+            }
+
+            // 收集当前活跃事件ID
+            activeIDs := make(map[string]bool)
+            for _, e := range state.ActiveEvents {
+                if e.Status != "active" {
+                    continue
+                }
+                activeIDs[e.Id] = true
+                // 只广播新事件
+                if notifiedEvents[e.Id] {
+                    continue
+                }
+                notifiedEvents[e.Id] = true
+                h.BroadcastToAll(types.Message{
+                    Type:    types.MessageTypeWorldEvent,
+                    Payload: map[string]interface{}{
+                        "id":          e.Id,
+                        "name":        e.Name,
+                        "type":        e.Type,
+                        "description": e.Description,
+                        "region_id":   e.RegionId,
+                        "start_time":  e.StartTime,
+                        "end_time":    e.EndTime,
+                        "status":      e.Status,
+                    },
+                })
+            }
+            // 清理已结束的事件通知记录
+            for id := range notifiedEvents {
+                if !activeIDs[id] {
+                    delete(notifiedEvents, id)
+                }
+            }
+        }
+    }()
+}
+
+func NewWebSocketClient(entityID types.EntityID, name string, conn *websocket.Conn, hub *WebSocketHub, gameClient *service.GameServiceClient) *WebSocketClient {
     return &WebSocketClient{
         entityID:   entityID,
+        name:       name,
         conn:       conn,
         send:       make(chan types.Message, 256),
         hub:        hub,
@@ -216,6 +275,27 @@ func (c *WebSocketClient) handleOperation(msg *types.Message) {
         "timestamp":  result.Timestamp,
         "request_id": requestID,
     }
+
+    // 世界频道消息广播给所有在线玩家
+    if result.Success && actionType == "send_message" {
+        effects := result.Effects
+        if effects != nil {
+            if broadcast, _ := effects["broadcast"].(bool); broadcast {
+                broadcastPayload := map[string]interface{}{
+                    "sender_id":   effects["sender_id"],
+                    "sender_name": effects["sender_name"],
+                    "content":     effects["content"],
+                    "channel":     "world",
+                    "timestamp":   effects["timestamp"],
+                }
+                c.hub.BroadcastToAll(types.Message{
+                    Type:    types.MessageTypeChat,
+                    Payload: broadcastPayload,
+                })
+            }
+        }
+    }
+
     c.send <- types.Message{
         Type:    types.MessageTypeOpResult,
         Payload: payload,
@@ -234,6 +314,7 @@ func (c *WebSocketClient) handleChat(msg *types.Message) {
         Type: types.MessageTypeChat,
         Payload: map[string]interface{}{
             "sender_id":   string(c.entityID),
+            "sender_name": c.name,
             "content":     content,
             "channel":     channel,
             "timestamp":   time.Now().UnixNano(),

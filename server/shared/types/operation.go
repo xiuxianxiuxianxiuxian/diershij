@@ -38,6 +38,26 @@ const (
     ActionLearnMethod   ActionType = "learn_method"
     ActionSetMainMethod ActionType = "set_main_method"
     ActionListMethods   ActionType = "list_methods"
+    ActionBuy           ActionType = "buy"
+    ActionSell          ActionType = "sell"
+    ActionShopList      ActionType = "shop_list"
+    ActionShopItems     ActionType = "shop_items"
+    ActionAuctionList   ActionType = "auction_list"
+    ActionAuctionBuy    ActionType = "auction_buy"
+    ActionAuctionCancel ActionType = "auction_cancel"
+    ActionAuctionView   ActionType = "auction_view"
+    // 邮件
+    ActionMailList      ActionType = "mail_list"
+    ActionMailRead      ActionType = "mail_read"
+    ActionMailClaim     ActionType = "mail_claim"
+    ActionMailDelete    ActionType = "mail_delete"
+    // 排行榜
+    ActionLeaderboard   ActionType = "leaderboard"
+    // 附近玩家
+    ActionNearbyPlayers ActionType = "nearby_players"
+    ActionWorldEvents   ActionType = "world_events"
+    // 自动战斗
+    ActionAutoCombat    ActionType = "auto_combat"
 )
 
 type Operation struct {

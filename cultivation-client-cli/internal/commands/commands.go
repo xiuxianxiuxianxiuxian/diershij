@@ -96,6 +96,22 @@ func init() {
 		// ── 交易 ──
 		{Names: []string{"交易", "trade"}, Desc: "交易物品", Handler: cmdTrade, Usage: "交易 <目标ID> <物品ID> <价格>"},
 
+		// ── 商店 ──
+		{Names: []string{"商店", "shop"}, Desc: "商店系统", Sub: []*CmdDef{
+			{Names: []string{"列表", "list", "ls"}, Desc: "查看附近商店", Handler: cmdShopList},
+			{Names: []string{"物品", "items"}, Desc: "查看商店物品", Handler: cmdShopItems, Usage: "物品 <商店ID>"},
+			{Names: []string{"购买", "buy"}, Desc: "购买物品", Handler: cmdShopBuy, Usage: "购买 <商店ID> <物品名> [数量]"},
+			{Names: []string{"出售", "sell"}, Desc: "出售物品", Handler: cmdShopSell, Usage: "出售 <商店ID> <物品名> [数量]"},
+		}},
+
+		// ── 拍卖行 ──
+		{Names: []string{"拍卖", "auction"}, Desc: "拍卖行系统", Sub: []*CmdDef{
+			{Names: []string{"列表", "list", "ls"}, Desc: "查看拍卖列表", Handler: cmdAuctionList},
+			{Names: []string{"上架", "create"}, Desc: "上架拍卖物品", Handler: cmdAuctionCreate, Usage: "上架 <物品名> <价格> [数量]"},
+			{Names: []string{"购买", "buy"}, Desc: "购买拍卖物品", Handler: cmdAuctionBuy, Usage: "购买 <拍卖ID>"},
+			{Names: []string{"取消", "cancel"}, Desc: "取消拍卖", Handler: cmdAuctionCancel, Usage: "取消 <拍卖ID>"},
+		}},
+
 		// ── 装备 ──
 		{Names: []string{"装备", "equipment"}, Desc: "装备管理", Sub: []*CmdDef{
 			{Names: []string{"列表", "list", "ls"}, Desc: "查看已装备物品", Handler: cmdShowEquipment},
@@ -109,6 +125,25 @@ func init() {
 			{Names: []string{"学习", "learn"}, Desc: "学习功法", Handler: cmdMethodLearn, Usage: "学习 <功法ID>"},
 			{Names: []string{"装备", "equip", "set"}, Desc: "设置主修功法", Handler: cmdMethodSetMain, Usage: "装备 <功法ID>"},
 		}},
+
+		// ── 排行榜 ──
+		{Names: []string{"排行榜", "leaderboard", "rank"}, Desc: "排行榜", Sub: []*CmdDef{
+			{Names: []string{"修为榜", "cultivation", "cult"}, Desc: "查看修为排行榜", Handler: cmdLeaderboardCultivation},
+			{Names: []string{"战力榜", "combat", "pwr"}, Desc: "查看战力排行榜", Handler: cmdLeaderboardCombat},
+			{Names: []string{"财富榜", "wealth", "rich"}, Desc: "查看财富排行榜", Handler: cmdLeaderboardWealth},
+			{Names: []string{"功德榜", "merit", "virtue"}, Desc: "查看功德排行榜", Handler: cmdLeaderboardMerit},
+		}},
+
+		// ── 邮件 ──
+		{Names: []string{"邮件", "mail"}, Desc: "信箱系统", Sub: []*CmdDef{
+			{Names: []string{"列表", "list", "ls"}, Desc: "查看邮件列表", Handler: cmdMailList},
+			{Names: []string{"读取", "read"}, Desc: "读取邮件", Handler: cmdMailRead, Usage: "读取 <邮件ID>"},
+			{Names: []string{"领取", "claim"}, Desc: "领取附件", Handler: cmdMailClaim, Usage: "领取 <邮件ID>"},
+			{Names: []string{"删除", "delete", "del"}, Desc: "删除邮件", Handler: cmdMailDelete, Usage: "删除 <邮件ID>"},
+		}},
+
+		// ── 附近玩家 ──
+		{Names: []string{"附近", "nearby", "near"}, Desc: "查看附近玩家", Handler: cmdNearbyPlayers},
 
 		// ── Flat aliases for backward compatibility (hidden from help) ──
 		{Names: []string{"status", "st"}, Handler: cmdStatus, Context: func() bool { return false }},
@@ -142,6 +177,9 @@ func init() {
 		{Names: []string{"list_methods"}, Handler: cmdMethodList, Context: func() bool { return false }},
 		{Names: []string{"learn_method"}, Handler: cmdMethodLearn, Context: func() bool { return false }},
 		{Names: []string{"set_main_method"}, Handler: cmdMethodSetMain, Context: func() bool { return false }},
+		{Names: []string{"排行榜", "rank"}, Handler: cmdLeaderboardCultivation, Context: func() bool { return false }},
+		{Names: []string{"邮件", "mail"}, Handler: cmdMailList, Context: func() bool { return false }},
+		{Names: []string{"附近", "nearby"}, Handler: cmdNearbyPlayers, Context: func() bool { return false }},
 	}
 }
 
@@ -1307,4 +1345,174 @@ func cmdMethodSetMain(conn *websocket.Conn, entityID string, args []string) {
 	client.SendAction(conn, "set_main_method", map[string]interface{}{
 		"method_id": args[0],
 	})
+}
+
+// ── 商店命令（F5） ──
+
+func cmdShopList(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "shop_list", nil)
+}
+
+func cmdShopItems(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 物品 <商店ID>")
+		return
+	}
+	client.SendAction(conn, "shop_items", map[string]interface{}{
+		"shop_id": args[0],
+	})
+}
+
+func cmdShopBuy(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("用法: 购买 <商店ID> <物品名> [数量]")
+		return
+	}
+	params := map[string]interface{}{
+		"shop_id":   args[0],
+		"item_name": args[1],
+	}
+	if len(args) >= 3 {
+		if q, err := strconv.Atoi(args[2]); err == nil && q > 0 {
+			params["quantity"] = q
+		}
+	}
+	client.SendAction(conn, "buy", params)
+}
+
+func cmdShopSell(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("用法: 出售 <商店ID> <物品名> [数量]")
+		return
+	}
+	params := map[string]interface{}{
+		"shop_id":   args[0],
+		"item_name": args[1],
+	}
+	if len(args) >= 3 {
+		if q, err := strconv.Atoi(args[2]); err == nil && q > 0 {
+			params["quantity"] = q
+		}
+	}
+	client.SendAction(conn, "sell", params)
+}
+
+// ── 拍卖命令（F4/F5） ──
+
+func cmdAuctionList(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "auction_view", nil)
+}
+
+func cmdAuctionCreate(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("用法: 上架 <物品名> <价格> [数量]")
+		return
+	}
+	price, _ := strconv.ParseFloat(args[1], 64)
+	params := map[string]interface{}{
+		"item_name": args[0],
+		"price":     price,
+	}
+	if len(args) >= 3 {
+		if q, err := strconv.Atoi(args[2]); err == nil && q > 0 {
+			params["quantity"] = q
+		}
+	}
+	client.SendAction(conn, "auction_list", params)
+}
+
+func cmdAuctionBuy(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 购买 <拍卖ID>")
+		return
+	}
+	client.SendAction(conn, "auction_buy", map[string]interface{}{
+		"auction_id": args[0],
+	})
+}
+
+func cmdAuctionCancel(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 取消 <拍卖ID>")
+		return
+	}
+	client.SendAction(conn, "auction_cancel", map[string]interface{}{
+		"auction_id": args[0],
+	})
+}
+
+// ── 排行榜 ──
+
+func cmdLeaderboardCultivation(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "leaderboard", map[string]interface{}{
+		"board_type": "cultivation",
+	})
+}
+
+func cmdLeaderboardCombat(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "leaderboard", map[string]interface{}{
+		"board_type": "combat",
+	})
+}
+
+func cmdLeaderboardWealth(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "leaderboard", map[string]interface{}{
+		"board_type": "wealth",
+	})
+}
+
+func cmdLeaderboardMerit(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "leaderboard", map[string]interface{}{
+		"board_type": "merit",
+	})
+}
+
+// ── 邮件 ──
+
+func cmdMailList(conn *websocket.Conn, entityID string, args []string) {
+	mailType := ""
+	if len(args) >= 1 {
+		mailType = args[0]
+	}
+	params := map[string]interface{}{}
+	if mailType != "" {
+		params["mail_type"] = mailType
+	}
+	client.SendAction(conn, "mail_list", params)
+}
+
+func cmdMailRead(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 读取 <邮件ID>")
+		return
+	}
+	client.SendAction(conn, "mail_read", map[string]interface{}{
+		"mail_id": args[0],
+	})
+}
+
+func cmdMailClaim(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 领取 <邮件ID>")
+		return
+	}
+	client.SendAction(conn, "mail_claim", map[string]interface{}{
+		"mail_id": args[0],
+	})
+}
+
+func cmdMailDelete(conn *websocket.Conn, entityID string, args []string) {
+	if len(args) < 1 {
+		fmt.Println("用法: 删除 <邮件ID>")
+		return
+	}
+	client.SendAction(conn, "mail_delete", map[string]interface{}{
+		"mail_id": args[0],
+	})
+}
+
+// ── 附近玩家 ──
+
+func cmdNearbyPlayers(conn *websocket.Conn, entityID string, args []string) {
+	client.SendAction(conn, "nearby_players", nil)
 }

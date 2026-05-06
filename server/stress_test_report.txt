@@ -1,0 +1,93 @@
+
+============================================================
+  迭代 1: stress_1777995970_1
+============================================================
+  [PASS] 注册: ID=b8bf9c89d582... 灵根=[wood(68), earth(49)]
+  [PASS] 灵根生成: 2条: ['wood', 'earth']
+  [PASS] WS连接: 
+  [PASS] list_methods: 当前境界可学功法 2 部
+  [PASS] learn_method: 基础吐纳术: 成功学习功法：基础吐纳术（黄级）
+  [PASS] set_main_method: 已将主修功法设为：基础吐纳术（黄级）
+  [PASS] learn_method#2: 成功学习功法：养气诀（黄级）
+  [PASS] cultivate: 第1次: +1.169
+  [PASS] cultivate x5: 总进度=6.40
+  [PASS] meditate: 打坐恢复中
+  [PASS] sleep: 休息完成，状态已恢复
+  [PASS] explore x3: 3/3 成功
+  [PASS] move x4: 3/4 成功
+  [PASS] gather: 该区域没有此资源
+  [PASS] send_message: 消息发送成功！
+  [PASS] add_friend: 请输入名称
+  [PASS] list_friends: 共有 0 位好友
+  [PASS] combat: 目标不存在
+  [PASS] cast_spell(无): 法术不存在
+  [PASS] use_skill: 当前不在战斗中
+  [PASS] flee: 当前不在战斗中
+  [PASS] create_method: 需要元婴期或更高境界
+  [PASS] use_item: 找不到该物品: 灵芝
+  [PASS] breakthrough(修为不足): 修为不足，无法突破
+  [PASS] sect_info: 请指定宗门ID
+
+============================================================
+  迭代 2: stress_1777995970_2
+============================================================
+  [PASS] 注册: ID=87d509b30b1d... 灵根=[water(82), metal(26)]
+  [PASS] 灵根生成: 2条: ['water', 'metal']
+  [PASS] WS连接: 
+  [PASS] list_methods: 当前境界可学功法 2 部
+  [PASS] learn_method: 基础吐纳术: 成功学习功法：基础吐纳术（黄级）
+  [PASS] set_main_method: 已将主修功法设为：基础吐纳术（黄级）
+  [PASS] learn_method#2: 成功学习功法：养气诀（黄级）
+  [PASS] cultivate: 第1次: +1.367
+  [PASS] cultivate x5: 总进度=6.35
+  [PASS] meditate: 打坐恢复中
+  [PASS] sleep: 休息完成，状态已恢复
+  [PASS] explore x3: 3/3 成功
+  [PASS] move x4: 3/4 成功
+  [PASS] gather: 该区域没有此资源
+  [PASS] send_message: 消息发送成功！
+  [PASS] add_friend: 请输入名称
+  [PASS] list_friends: 共有 0 位好友
+  [PASS] combat: 目标不存在
+  [PASS] cast_spell(无): 法术不存在
+  [PASS] use_skill: 当前不在战斗中
+  [PASS] flee: 当前不在战斗中
+  [PASS] create_method: 需要元婴期或更高境界
+  [PASS] use_item: 找不到该物品: 灵芝
+  [PASS] breakthrough(修为不足): 修为不足，无法突破
+  [PASS] sect_info: 请指定宗门ID
+
+============================================================
+  迭代 3: stress_1777995971_3
+============================================================
+  [PASS] 注册: ID=6f59b65c4d6e... 灵根=[metal(75)]
+  [PASS] 灵根生成: 1条: ['metal']
+  [PASS] WS连接: 
+  [PASS] list_methods: 当前境界可学功法 2 部
+  [PASS] learn_method: 基础吐纳术: 成功学习功法：基础吐纳术（黄级）
+  [PASS] set_main_method: 已将主修功法设为：基础吐纳术（黄级）
+  [PASS] learn_method#2: 成功学习功法：养气诀（黄级）
+  [PASS] cultivate: 第1次: +1.165
+  [PASS] cultivate x5: 总进度=6.29
+  [PASS] meditate: 打坐恢复中
+  [PASS] sleep: 休息完成，状态已恢复
+  [PASS] explore x3: 3/3 成功
+  [PASS] move x4: 3/4 成功
+  [PASS] gather: 该区域没有此资源
+  [PASS] send_message: 消息发送成功！
+  [PASS] add_friend: 请输入名称
+  [PASS] list_friends: 共有 0 位好友
+  [PASS] combat: 目标不存在
+  [PASS] cast_spell(无): 法术不存在
+  [PASS] use_skill: 当前不在战斗中
+  [PASS] flee: 当前不在战斗中
+  [PASS] create_method: 需要元婴期或更高境界
+  [PASS] use_item: 找不到该物品: 灵芝
+  [PASS] breakthrough(修为不足): 修为不足，无法突破
+  [PASS] sect_info: 请指定宗门ID
+
+============================================================
+  全部测试完成 (3 轮)
+  通过: 75/75  (100%)
+  失败: 0/75
+============================================================

@@ -515,3 +515,116 @@ func (r *EntityRepository) GetCachedEntity(ctx context.Context, id types.EntityI
     }
     return &entity, nil
 }
+
+func (r *EntityRepository) GetAllPlayers(ctx context.Context) ([]*types.Entity, error) {
+    query := `
+        SELECT id, entity_type, name, realm, region_id, x, y, status, created_at, updated_at
+        FROM entities WHERE entity_type = 'player' ORDER BY name
+    `
+    rows, err := r.db.Pool().Query(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var players []*types.Entity
+    for rows.Next() {
+        var entity types.Entity
+        var pos struct {
+            RegionID string
+            X, Y     float64
+        }
+        err := rows.Scan(
+            &entity.ID, &entity.EntityType, &entity.Name, &entity.Realm,
+            &pos.RegionID, &pos.X, &pos.Y, &entity.Status,
+            &entity.CreatedAt, &entity.UpdatedAt,
+        )
+        if err != nil {
+            return nil, err
+        }
+        entity.Position = types.WorldPosition{
+            RegionID: pos.RegionID,
+            X:        pos.X,
+            Y:        pos.Y,
+        }
+        karma, _ := r.karma.GetByEntityID(ctx, entity.ID)
+        if karma != nil {
+            entity.Karma = *karma
+        }
+        players = append(players, &entity)
+    }
+    return players, rows.Err()
+}
+
+func (r *EntityRepository) GetByRegion(ctx context.Context, regionID string) ([]*types.Entity, error) {
+	query := `
+		SELECT id, entity_type, name, realm, region_id, x, y, status, created_at, updated_at
+		FROM entities WHERE entity_type = 'player' AND region_id = $1 ORDER BY name
+	`
+	rows, err := r.db.Pool().Query(ctx, query, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var players []*types.Entity
+	for rows.Next() {
+		var entity types.Entity
+		var pos struct {
+			RegionID string
+			X, Y     float64
+		}
+		err := rows.Scan(
+			&entity.ID, &entity.EntityType, &entity.Name, &entity.Realm,
+			&pos.RegionID, &pos.X, &pos.Y, &entity.Status,
+			&entity.CreatedAt, &entity.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		entity.Position = types.WorldPosition{
+			RegionID: pos.RegionID,
+			X:        pos.X,
+			Y:        pos.Y,
+		}
+		players = append(players, &entity)
+	}
+	return players, rows.Err()
+}
+
+func (r *EntityRepository) GetNPCsByRegion(ctx context.Context, regionID string) ([]*types.Entity, error) {
+	query := `
+		SELECT id, entity_type, name, realm, region_id, x, y, status, created_at, updated_at
+		FROM entities WHERE entity_type = 'npc' AND region_id = $1 ORDER BY name
+	`
+	rows, err := r.db.Pool().Query(ctx, query, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var npcs []*types.Entity
+	for rows.Next() {
+		var entity types.Entity
+		var pos struct {
+			RegionID string
+			X, Y     float64
+		}
+		err := rows.Scan(
+			&entity.ID, &entity.EntityType, &entity.Name, &entity.Realm,
+			&pos.RegionID, &pos.X, &pos.Y, &entity.Status,
+			&entity.CreatedAt, &entity.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		entity.Position = types.WorldPosition{
+			RegionID: pos.RegionID,
+			X:        pos.X,
+			Y:        pos.Y,
+		}
+		npcs = append(npcs, &entity)
+	}
+	return npcs, rows.Err()
+}
+

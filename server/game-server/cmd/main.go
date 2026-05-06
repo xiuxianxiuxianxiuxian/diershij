@@ -42,6 +42,9 @@ func main() {
 	friendRepo := repository.NewFriendRepository(db)
 	methodRepo := repository.NewMethodRepository(db)
 
+	shopRepo := repository.NewShopRepository(db)
+	mailRepo := repository.NewPostgresMailRepository(db)
+
 	worldConn, err := grpc.Dial(
 		fmt.Sprintf("%s:%d", cfg.WorldEngine.Host, cfg.WorldEngine.Port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -64,7 +67,8 @@ func main() {
 
 	operationSvc := service.NewOperationService(entityRepo, itemRepo, inventoryRepo, spellRepo, messageRepo, worldClient, daoClient,
 		service.NewSectRepoAdapter(sectRepo), service.NewRecipeRepoAdapter(recipeRepo), service.NewFriendRepoAdapter(friendRepo),
-		service.NewMethodRepoAdapter(methodRepo))
+		service.NewMethodRepoAdapter(methodRepo), service.NewShopRepoAdapter(shopRepo), service.NewMailRepoAdapter(mailRepo))
+	service.LeaderboardStartRefresh(operationSvc, 0)
 	gameSvc := service.NewGameService(entityRepo, operationSvc, spellRepo, itemRepo, inventoryRepo)
 
 	grpcServer := grpc.NewServer(

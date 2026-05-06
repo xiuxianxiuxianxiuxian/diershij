@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/cultivation-world/game-server/internal/repository"
 	"github.com/cultivation-world/shared/types"
@@ -282,6 +283,240 @@ func (a *methodRepoAdapter) GetMainMethod(ctx context.Context, entityID types.En
 		IsMainMethod: em.IsMainMethod,
 		LearnedAt:    em.LearnedAt.Unix(),
 	}, nil
+}
+
+// ── 商店系统适配器 ──
+
+type shopRepoAdapter struct {
+	repo *repository.ShopRepository
+}
+
+func NewShopRepoAdapter(repo *repository.ShopRepository) ShopRepository {
+	return &shopRepoAdapter{repo: repo}
+}
+
+func (a *shopRepoAdapter) GetShopByID(ctx context.Context, shopID string) (*ShopRInfo, error) {
+	s, err := a.repo.GetShopByID(ctx, shopID)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil {
+		return nil, nil
+	}
+	return &ShopRInfo{
+		ID:          s.ID,
+		Name:        s.Name,
+		Description: s.Description,
+		RegionID:    s.RegionID,
+		ShopType:    s.ShopType,
+		NPCOwner:    s.NPCOwner,
+		MarkupRate:  s.MarkupRate,
+		BuyRate:     s.BuyRate,
+	}, nil
+}
+
+func (a *shopRepoAdapter) ListShopsByRegion(ctx context.Context, regionID string) ([]*ShopRInfo, error) {
+	shops, err := a.repo.ListShopsByRegion(ctx, regionID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ShopRInfo, 0, len(shops))
+	for _, s := range shops {
+		result = append(result, &ShopRInfo{
+			ID:          s.ID,
+			Name:        s.Name,
+			Description: s.Description,
+			RegionID:    s.RegionID,
+			ShopType:    s.ShopType,
+			NPCOwner:    s.NPCOwner,
+			MarkupRate:  s.MarkupRate,
+			BuyRate:     s.BuyRate,
+		})
+	}
+	return result, nil
+}
+
+func (a *shopRepoAdapter) GetShopInventory(ctx context.Context, shopID string) ([]*ShopItemInfo, error) {
+	items, err := a.repo.GetShopInventory(ctx, shopID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*ShopItemInfo, 0, len(items))
+	for _, item := range items {
+		result = append(result, &ShopItemInfo{
+			ID:           item.ID,
+			ShopID:       item.ShopID,
+			ItemName:     item.ItemName,
+			ItemType:     item.ItemType,
+			Rarity:       item.Rarity,
+			Price:        item.Price,
+			Quantity:     item.Quantity,
+			RefreshHours: item.RefreshHours,
+			MinRealm:     item.MinRealm,
+		})
+	}
+	return result, nil
+}
+
+func (a *shopRepoAdapter) GetShopItemByName(ctx context.Context, shopID string, itemName string) (*ShopItemInfo, error) {
+	item, err := a.repo.GetShopItemByName(ctx, shopID, itemName)
+	if err != nil {
+		return nil, err
+	}
+	if item == nil {
+		return nil, nil
+	}
+	return &ShopItemInfo{
+		ID:           item.ID,
+		ShopID:       item.ShopID,
+		ItemName:     item.ItemName,
+		ItemType:     item.ItemType,
+		Rarity:       item.Rarity,
+		Price:        item.Price,
+		Quantity:     item.Quantity,
+		RefreshHours: item.RefreshHours,
+		MinRealm:     item.MinRealm,
+	}, nil
+}
+
+func (a *shopRepoAdapter) DecrementShopStock(ctx context.Context, shopID string, itemName string, quantity int) error {
+	return a.repo.DecrementShopStock(ctx, shopID, itemName, quantity)
+}
+
+func (a *shopRepoAdapter) CreateAuction(ctx context.Context, sellerID, itemID, itemName string, quantity int, price, deposit int64) (string, error) {
+	auction := &repository.Auction{
+		SellerID:  sellerID,
+		ItemID:    itemID,
+		ItemName:  itemName,
+		Quantity:  quantity,
+		Price:     price,
+		Deposit:   deposit,
+		Status:    "active",
+		CreatedAt: time.Now(),
+	}
+	if err := a.repo.CreateAuction(ctx, auction); err != nil {
+		return "", err
+	}
+	return auction.ID, nil
+}
+
+func (a *shopRepoAdapter) GetAuctionByID(ctx context.Context, auctionID string) (*AuctionInfo, error) {
+	auction, err := a.repo.GetAuctionByID(ctx, auctionID)
+	if err != nil {
+		return nil, err
+	}
+	if auction == nil {
+		return nil, nil
+	}
+	ai := &AuctionInfo{
+		ID:        auction.ID,
+		SellerID:  auction.SellerID,
+		ItemID:    auction.ItemID,
+		ItemName:  auction.ItemName,
+		Quantity:  auction.Quantity,
+		Price:     auction.Price,
+		Deposit:   auction.Deposit,
+		Status:    auction.Status,
+		CreatedAt: auction.CreatedAt.Unix(),
+		ExpiresAt: func() int64 {
+			if auction.ExpiresAt != nil {
+				return auction.ExpiresAt.Unix()
+			}
+			return 0
+		}(),
+	}
+	if auction.BuyerID != nil {
+		ai.BuyerID = *auction.BuyerID
+	}
+	if auction.SoldAt != nil {
+		ai.SoldAt = auction.SoldAt.Unix()
+	}
+	return ai, nil
+}
+
+func (a *shopRepoAdapter) ListActiveAuctions(ctx context.Context) ([]*AuctionInfo, error) {
+	auctions, err := a.repo.ListActiveAuctions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*AuctionInfo, 0, len(auctions))
+	for _, auction := range auctions {
+		ai := &AuctionInfo{
+			ID:        auction.ID,
+			SellerID:  auction.SellerID,
+			ItemID:    auction.ItemID,
+			ItemName:  auction.ItemName,
+			Quantity:  auction.Quantity,
+			Price:     auction.Price,
+			Deposit:   auction.Deposit,
+			Status:    auction.Status,
+			CreatedAt: auction.CreatedAt.Unix(),
+			ExpiresAt: func() int64 {
+				if auction.ExpiresAt != nil {
+					return auction.ExpiresAt.Unix()
+				}
+				return 0
+			}(),
+		}
+		if auction.BuyerID != nil {
+			ai.BuyerID = *auction.BuyerID
+		}
+		if auction.SoldAt != nil {
+			ai.SoldAt = auction.SoldAt.Unix()
+		}
+		result = append(result, ai)
+	}
+	return result, nil
+}
+
+func (a *shopRepoAdapter) BuyAuction(ctx context.Context, auctionID string, buyerID string) error {
+	return a.repo.BuyAuction(ctx, auctionID, buyerID)
+}
+
+func (a *shopRepoAdapter) CancelAuction(ctx context.Context, auctionID string, sellerID string) error {
+	return a.repo.CancelAuction(ctx, auctionID, sellerID)
+}
+
+// ── 邮件系统适配器 ──
+
+type mailRepoAdapter struct {
+	repo *repository.PostgresMailRepository
+}
+
+func NewMailRepoAdapter(repo *repository.PostgresMailRepository) MailRepository {
+	return &mailRepoAdapter{repo: repo}
+}
+
+func (a *mailRepoAdapter) Create(ctx context.Context, mail *types.Mail) error {
+	return a.repo.Create(ctx, mail)
+}
+
+func (a *mailRepoAdapter) GetByID(ctx context.Context, id string) (*types.Mail, error) {
+	return a.repo.GetByID(ctx, id)
+}
+
+func (a *mailRepoAdapter) GetByReceiver(ctx context.Context, receiverID types.EntityID, limit int) ([]*types.Mail, error) {
+	return a.repo.GetByReceiver(ctx, receiverID, limit)
+}
+
+func (a *mailRepoAdapter) GetUnreadByReceiver(ctx context.Context, receiverID types.EntityID) ([]*types.Mail, error) {
+	return a.repo.GetUnreadByReceiver(ctx, receiverID)
+}
+
+func (a *mailRepoAdapter) GetUnclaimedByReceiver(ctx context.Context, receiverID types.EntityID) ([]*types.Mail, error) {
+	return a.repo.GetUnclaimedByReceiver(ctx, receiverID)
+}
+
+func (a *mailRepoAdapter) MarkAsRead(ctx context.Context, mailID string) error {
+	return a.repo.MarkAsRead(ctx, mailID)
+}
+
+func (a *mailRepoAdapter) MarkAsClaimed(ctx context.Context, mailID string) error {
+	return a.repo.MarkAsClaimed(ctx, mailID)
+}
+
+func (a *mailRepoAdapter) Delete(ctx context.Context, mailID string) error {
+	return a.repo.Delete(ctx, mailID)
 }
 
 func (a *friendRepoAdapter) GetFriends(ctx context.Context, entityID string) ([]*FriendshipInfo, error) {

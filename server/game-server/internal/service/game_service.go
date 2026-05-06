@@ -92,6 +92,9 @@ func (s *GameService) CreateEntity(ctx context.Context, req *cultivation.CreateE
 			RootPurity:          50,
 			PoisonLevel:         0,
 			CurseLevel:          0,
+			SpiritStones: types.SpiritStones{
+				LowGrade: 100,
+			},
 		},
 		Karma: types.Karma{
 			KarmaValue:   0,
